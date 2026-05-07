@@ -31,19 +31,19 @@
         outline: none;
       }
       input:focus { border-color: #5b8cff; }
+      .row { display: flex; gap: 8px; margin-top: 12px; }
       button {
-        width: 100%;
-        margin-top: 12px;
+        flex: 1;
         padding: 10px;
-        background: #5b8cff;
-        color: white;
         border: none;
         border-radius: 6px;
         font-size: 13px;
         font-weight: 600;
         cursor: pointer;
       }
-      button:disabled { background: #3a3b40; cursor: not-allowed; }
+      button.primary { background: #5b8cff; color: white; }
+      button.primary:disabled { background: #3a3b40; cursor: not-allowed; }
+      button.ghost { background: transparent; color: #8b8d92; border: 1px solid #2a2c31; }
       .msg { margin-top: 8px; font-size: 12px; min-height: 16px; }
       .msg.err { color: #ff6b6b; }
     </style>
@@ -51,14 +51,18 @@
   <body>
     <div class="card">
       <h1>키오스크 해제</h1>
-      <p class="sub">임시 비밀번호 또는 스토어 ID를 입력하세요.</p>
+      <p class="sub">임시 비밀번호 또는 스토어 ID를 입력하세요. (취소 시 잠금 유지)</p>
       <input id="pw" type="password" autofocus />
-      <button id="ok">확인</button>
+      <div class="row">
+        <button id="cancel" class="ghost">취소</button>
+        <button id="ok" class="primary">확인</button>
+      </div>
       <div id="msg" class="msg"></div>
     </div>
     <script>
       const pw = document.getElementById("pw");
       const ok = document.getElementById("ok");
+      const cancel = document.getElementById("cancel");
       const msg = document.getElementById("msg");
 
       function setErr(text) {
@@ -78,8 +82,16 @@
         }
       }
 
+      function dismiss() {
+        window.electronAPI.kioskCancelModal();
+      }
+
       ok.addEventListener("click", submit);
-      pw.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+      cancel.addEventListener("click", dismiss);
+      pw.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submit();
+        if (e.key === "Escape") dismiss();
+      });
     </script>
   </body>
 </html>

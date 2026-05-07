@@ -108,7 +108,8 @@ export function installKiosk(opts: {
   });
 
   ipcMain.handle("kiosk:cancel-modal", () => {
-    if (locked) return { ok: false };
+    // 진입/해제 모달 모두 취소 가능 — 잠금 상태는 유지됨
+    pendingExitAction = null;
     closeModal();
     return { ok: true };
   });
