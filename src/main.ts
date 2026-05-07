@@ -1,24 +1,21 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, shell } from "electron";
 import path from "node:path";
-import { hasConfig, loadConfig, resetConfig, saveConfig, TenantConfig } from "./config";
-import { applyKioskLockdown } from "./kiosk";
-import { resolveTenant, ResolveData } from "./resolve";
+import type { TenantConfig } from "./config";
+import { hasConfig, loadConfig, resetConfig, saveConfig } from "./config";
+import { installKiosk, type KioskController } from "./kiosk";
+import { resolveTenant, type ResolveData } from "./resolve";
 import { buildTenantUrl } from "./url";
 import { BASE_URL } from "./env";
 
 const RENDERER_DIR = path.join(__dirname, "..", "renderer");
 
 let mainWindow: BrowserWindow | null = null;
+let kiosk: KioskController | null = null;
 
 function createWindow(): void {
-  const config = loadConfig();
-  const kiosk = config?.kiosk ?? false;
-
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    fullscreen: kiosk,
-    kiosk,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -28,7 +25,10 @@ function createWindow(): void {
     },
   });
 
-  if (kiosk && mainWindow) applyKioskLockdown(mainWindow);
+  kiosk = installKiosk({
+    mainWindow,
+    getTenantConfig: () => loadConfig(),
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -43,8 +43,9 @@ function createWindow(): void {
 
   if (!hasConfig()) {
     mainWindow.loadFile(path.join(RENDERER_DIR, "setup.html"));
-  } else if (config) {
-    mainWindow.loadURL(buildTenantUrl(config));
+  } else {
+    const config = loadConfig();
+    if (config) mainWindow.loadURL(buildTenantUrl(config));
   }
 }
 
@@ -74,7 +75,14 @@ ipcMain.handle("tenant:reset", () => {
   app.exit(0);
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  globalShortcut.register("Control+Shift+K", () => kiosk?.requestEnter());
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
