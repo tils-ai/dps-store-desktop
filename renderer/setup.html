@@ -58,8 +58,8 @@
   <body>
     <div class="card">
       <h1>스토어 연결</h1>
-      <p class="sub">테넌트 이름을 입력하세요.</p>
-      <label for="t">테넌트 이름</label>
+      <p class="sub">스토어 ID를 입력하세요.</p>
+      <label for="t">스토어 ID</label>
       <input id="t" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus />
       <button id="ok">확인</button>
       <div id="msg" class="msg"></div>
@@ -86,7 +86,7 @@
             await window.electronAPI.saveTenant(result.data);
           } else {
             let m = result.error || "오류가 발생했습니다.";
-            if (result.status === 404) m = "존재하지 않는 테넌트입니다.";
+            if (result.status === 404) m = "존재하지 않는 스토어 ID입니다.";
             else if (result.status === 422) m = "사용할 수 없는 이름입니다.";
             else if (result.status === 429) m = "잠시 후 다시 시도해주세요.";
             else if (result.status === 0) m = "네트워크에 연결할 수 없습니다.";
