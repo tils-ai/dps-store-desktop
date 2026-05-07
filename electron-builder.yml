@@ -12,6 +12,10 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+mac:
+  target: dmg
+  category: public.app-category.business
+  identity: null # 코드 사이닝 미적용 (Gatekeeper 경고 회피는 사용자가 우클릭 → 열기로 처리)
 publish:
   provider: github
   owner: tils-ai
