@@ -1,6 +1,6 @@
 {
   "name": "dps-store-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "DPS Store Windows desktop app (Electron)",
   "main": "dist/main.js",

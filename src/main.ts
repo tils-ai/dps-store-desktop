@@ -1,4 +1,5 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, shell } from "electron";
+import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import type { TenantConfig } from "./config";
 import { hasConfig, loadConfig, resetConfig, saveConfig } from "./config";
@@ -78,6 +79,10 @@ ipcMain.handle("tenant:reset", () => {
 app.whenReady().then(() => {
   createWindow();
   globalShortcut.register("Control+Shift+K", () => kiosk?.requestEnter());
+  // 패키지된 빌드에서만 동작. dev/unsigned macOS는 NoOp 또는 실패하나 무해.
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.warn("auto update check failed:", err);
+  });
 });
 
 app.on("will-quit", () => {
