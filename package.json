@@ -8,6 +8,7 @@
     "build": "tsc",
     "dev": "tsc && electron .",
     "build:win": "pnpm build && electron-builder --win",
+    "release": "pnpm build && electron-builder --win --publish always",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
