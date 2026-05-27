@@ -1,9 +1,11 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
-import type { TenantConfig } from "./config";
-import { hasConfig, loadConfig, resetConfig, saveConfig } from "./config";
+import type { PrinterConfig, TenantConfig } from "./config";
+import { getPrinterConfig, hasConfig, loadConfig, resetConfig, saveConfig, updatePrinterConfig } from "./config";
 import { installKiosk, type KioskController } from "./kiosk";
+import { closePrinter, listPorts, sendBytes } from "./printer";
+import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
 import { resolveTenant, type ResolveData } from "./resolve";
 import { buildTenantUrl } from "./url";
 import { BASE_URL } from "./env";
@@ -76,6 +78,67 @@ ipcMain.handle("tenant:reset", () => {
   app.exit(0);
 });
 
+ipcMain.handle("printer:get-config", () => getPrinterConfig());
+
+ipcMain.handle("printer:set-config", (_e, patch: unknown) => {
+  if (!patch || typeof patch !== "object") return { ok: false, error: "invalid patch" };
+  const p = patch as Partial<PrinterConfig>;
+  const cleaned: Partial<PrinterConfig> = {};
+  if (typeof p.com === "string" && p.com.length > 0) cleaned.com = p.com;
+  if (typeof p.baud === "number" && p.baud > 0) cleaned.baud = p.baud;
+  if (typeof p.enabled === "boolean") cleaned.enabled = p.enabled;
+  const next = updatePrinterConfig(cleaned);
+  if (!next) return { ok: false, error: "no tenant config" };
+  // 설정 변경 시 캐시된 포트 닫아 다음 호출에서 재오픈하도록
+  closePrinter();
+  return { ok: true, config: next };
+});
+
+ipcMain.handle("printer:list-ports", async () => {
+  try {
+    return { ok: true, ports: await listPorts() };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle("printer:print-receipt", async (_e, data: unknown) => {
+  try {
+    if (!data || typeof data !== "object") return { ok: false, error: "invalid receipt data" };
+    const bytes = buildReceipt(data as ReceiptData);
+    await sendBytes(bytes);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+async function printTestReceipt(): Promise<void> {
+  if (!mainWindow) return;
+  const tenant = loadConfig();
+  const cfg = getPrinterConfig();
+  if (!cfg.enabled) {
+    await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "프린터 진단",
+      message: "접수증 프린터가 비활성 상태입니다.",
+      detail: `config.json의 printer.enabled를 true로 두고, com=${cfg.com} baud=${cfg.baud}이 정확한지 확인하세요.`,
+    });
+    return;
+  }
+  try {
+    const bytes = buildReceipt(sampleReceipt(tenant?.brandName ?? "DPS Store"));
+    await sendBytes(bytes);
+  } catch (err) {
+    await dialog.showMessageBox(mainWindow, {
+      type: "error",
+      title: "프린터 진단 실패",
+      message: "테스트 출력 중 오류가 발생했습니다.",
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 async function confirmAndResetTenant(): Promise<void> {
   if (!mainWindow) return;
   const result = await dialog.showMessageBox(mainWindow, {
@@ -102,6 +165,10 @@ app.whenReady().then(() => {
   globalShortcut.register("Control+Shift+Alt+R", () => {
     confirmAndResetTenant().catch((err) => console.warn("reset confirm failed:", err));
   });
+  // 진단용 — 샘플 접수증을 현재 설정의 프린터로 1장 출력. 단말 설치 후 인터페이스 점검에 사용.
+  globalShortcut.register("Control+Shift+Alt+P", () => {
+    printTestReceipt().catch((err) => console.warn("test print failed:", err));
+  });
   // 패키지된 빌드에서만 동작. dev/unsigned macOS는 NoOp 또는 실패하나 무해.
   autoUpdater.checkForUpdatesAndNotify().catch((err) => {
     console.warn("auto update check failed:", err);
@@ -110,6 +177,7 @@ app.whenReady().then(() => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  closePrinter();
 });
 
 app.on("window-all-closed", () => {
