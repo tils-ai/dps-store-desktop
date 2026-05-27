@@ -113,29 +113,100 @@ ipcMain.handle("printer:print-receipt", async (_e, data: unknown) => {
   }
 });
 
+async function chooseAndEnablePort(): Promise<boolean> {
+  if (!mainWindow) return false;
+  let ports: { path: string; manufacturer?: string }[] = [];
+  try {
+    ports = await listPorts();
+  } catch {
+    /* ignore — 빈 목록으로 진행 */
+  }
+  const cfg = getPrinterConfig();
+  if (ports.length === 0) {
+    await dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      title: "프린터 진단",
+      message: "감지된 시리얼 포트가 없습니다.",
+      detail: "프린터 전원/USB 연결을 확인하고 다시 시도해주세요.",
+    });
+    return false;
+  }
+  const portButtons = ports.map((p) => (p.manufacturer ? `${p.path} (${p.manufacturer})` : p.path));
+  const buttons = [...portButtons, "취소"];
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: "question",
+    title: "프린터 진단 — COM 포트 선택",
+    message: "출력에 사용할 COM 포트를 선택하세요.",
+    detail: `현재 설정: com=${cfg.com}, baud=${cfg.baud}. 선택한 포트로 자동 활성화됩니다.`,
+    buttons,
+    defaultId: Math.max(
+      0,
+      ports.findIndex((p) => p.path === cfg.com)
+    ),
+    cancelId: buttons.length - 1,
+    noLink: true,
+  });
+  if (result.response === buttons.length - 1) return false;
+  const selected = ports[result.response]?.path;
+  if (!selected) return false;
+  updatePrinterConfig({ com: selected, enabled: true });
+  closePrinter(); // 캐시된 포트 닫고 다음 호출에서 재오픈
+  return true;
+}
+
 async function printTestReceipt(): Promise<void> {
   if (!mainWindow) return;
   const tenant = loadConfig();
   const cfg = getPrinterConfig();
+
+  // 비활성 상태면 활성화/포트선택 다이얼로그 먼저
   if (!cfg.enabled) {
-    await dialog.showMessageBox(mainWindow, {
-      type: "info",
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: "question",
       title: "프린터 진단",
       message: "접수증 프린터가 비활성 상태입니다.",
-      detail: `config.json의 printer.enabled를 true로 두고, com=${cfg.com} baud=${cfg.baud}이 정확한지 확인하세요.`,
+      detail: `현재 설정: com=${cfg.com}, baud=${cfg.baud}. 이 설정으로 활성화하고 출력하시겠습니까?`,
+      buttons: ["활성화 후 출력", "포트 변경...", "취소"],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
     });
-    return;
+    if (result.response === 2) return;
+    if (result.response === 0) {
+      updatePrinterConfig({ enabled: true });
+      closePrinter();
+    } else if (result.response === 1) {
+      const picked = await chooseAndEnablePort();
+      if (!picked) return;
+    }
   }
+
   try {
     const bytes = buildReceipt(sampleReceipt(tenant?.brandName ?? "DPS Store"));
     await sendBytes(bytes);
-  } catch (err) {
+    const next = getPrinterConfig();
     await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "프린터 진단",
+      message: "샘플 접수증을 송신했습니다.",
+      detail: `${next.com} / ${next.baud}bps — 종이가 안 나오면 프린터 전원/용지를 확인하세요.`,
+    });
+  } catch (err) {
+    const next = getPrinterConfig();
+    const result = await dialog.showMessageBox(mainWindow, {
       type: "error",
       title: "프린터 진단 실패",
       message: "테스트 출력 중 오류가 발생했습니다.",
-      detail: err instanceof Error ? err.message : String(err),
+      detail: `${next.com} / ${next.baud}bps\n${err instanceof Error ? err.message : String(err)}`,
+      buttons: ["포트 변경...", "닫기"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
     });
+    if (result.response === 0) {
+      const picked = await chooseAndEnablePort();
+      if (picked) await printTestReceipt(); // 재시도
+    }
   }
 }
 
