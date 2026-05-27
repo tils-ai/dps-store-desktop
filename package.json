@@ -1,6 +1,6 @@
 {
   "name": "dps-store-desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "DPS Store Windows desktop app (Electron)",
   "main": "dist/main.js",
@@ -14,7 +14,9 @@
   },
   "dependencies": {
     "electron-store": "^8.2.0",
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "iconv-lite": "^0.7.2",
+    "serialport": "^13.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
