@@ -27,6 +27,12 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      # node-gyp@9가 distutils를 import하는데 Python 3.12+에서 stdlib에서 제거됐다.
+      # serialport/bindings-cpp 같은 native 모듈 빌드를 위해 Python 3.11 고정.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - run: pnpm install --frozen-lockfile
 
       - name: Build & Publish
