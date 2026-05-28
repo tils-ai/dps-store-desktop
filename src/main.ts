@@ -15,9 +15,12 @@ const RENDERER_DIR = path.join(__dirname, "..", "renderer");
 let mainWindow: BrowserWindow | null = null;
 let kiosk: KioskController | null = null;
 
-// jarvis 에디터(PHP)는 동일 URL로 CSS/JS 내용만 갱신돼, Electron 디스크 캐시에
-// 옛 파일이 남아 갱신이 반영되지 않는다. jarvis 응답만 캐시하지 않도록 강제한다.
-// dps-store 본체 에셋은 빌드ID로 버전이 바뀌므로 영향 없음.
+// jarvis 에디터(PHP)의 정적 CSS/JS는 Cache-Control 없이 Last-Modified만 있어
+// Chromium 휴리스틱 캐싱((now-LastModified)*10%)에 걸린다. Last-Modified가 수년 전이라
+// 한 번 캐시되면 수개월간 재검증 없이 stale본이 쓰인다. no-store override는 네트워크
+// 응답에만 걸려, 캐시 히트(네트워크 미발생)인 기존 항목은 못 지우므로 부팅 시
+// clearCache로 한 번 비워야 한다(아래 whenReady 참고).
+// dps-store 본체 에셋은 빌드ID로 URL 버전이 바뀌므로 영향 없음.
 function disableJarvisCache(): void {
   session.defaultSession.webRequest.onHeadersReceived({ urls: ["https://jarvis.wepnp.com/*"] }, (details, callback) => {
     const headers: Record<string, string[]> = {};
@@ -244,8 +247,10 @@ async function confirmAndResetTenant(): Promise<void> {
   app.exit(0);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   disableJarvisCache();
+  // 이미 디스크 캐시에 박힌 휴리스틱 stale 항목 evict — 이후 no-store가 재캐싱 차단.
+  await session.defaultSession.clearCache();
   createWindow();
   globalShortcut.register("Control+Shift+K", () => kiosk?.requestEnter());
   // 새로고침 — 캐시를 무시하는 하드 리로드(메인 프레임 + jarvis iframe 포함).
