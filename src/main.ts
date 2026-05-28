@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, session, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import type { PrinterConfig, TenantConfig } from "./config";
@@ -14,6 +14,22 @@ const RENDERER_DIR = path.join(__dirname, "..", "renderer");
 
 let mainWindow: BrowserWindow | null = null;
 let kiosk: KioskController | null = null;
+
+// jarvis 에디터(PHP)는 동일 URL로 CSS/JS 내용만 갱신돼, Electron 디스크 캐시에
+// 옛 파일이 남아 갱신이 반영되지 않는다. jarvis 응답만 캐시하지 않도록 강제한다.
+// dps-store 본체 에셋은 빌드ID로 버전이 바뀌므로 영향 없음.
+function disableJarvisCache(): void {
+  session.defaultSession.webRequest.onHeadersReceived({ urls: ["https://jarvis.wepnp.com/*"] }, (details, callback) => {
+    const headers: Record<string, string[]> = {};
+    for (const [key, value] of Object.entries(details.responseHeaders ?? {})) {
+      const lower = key.toLowerCase();
+      if (lower === "cache-control" || lower === "expires" || lower === "pragma") continue;
+      headers[key] = value;
+    }
+    headers["cache-control"] = ["no-store"];
+    callback({ responseHeaders: headers });
+  });
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -229,8 +245,14 @@ async function confirmAndResetTenant(): Promise<void> {
 }
 
 app.whenReady().then(() => {
+  disableJarvisCache();
   createWindow();
   globalShortcut.register("Control+Shift+K", () => kiosk?.requestEnter());
+  // 새로고침 — 캐시를 무시하는 하드 리로드(메인 프레임 + jarvis iframe 포함).
+  // 외부 리소스가 stale일 때 재시작 없이 즉시 갱신하는 운영자용 단축키.
+  globalShortcut.register("Control+Shift+R", () => {
+    mainWindow?.webContents.reloadIgnoringCache();
+  });
   // 관리자 복구용 테넌트 초기화 단축키. 4키 조합으로 우발 입력 방지 + 확인 다이얼로그로 한 번 더 확인.
   // 키오스크 잠금 상태에서도 동작 — 잠금은 인메모리라 재시작 시 자연 해제됨.
   globalShortcut.register("Control+Shift+Alt+R", () => {
