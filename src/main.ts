@@ -4,7 +4,7 @@ import path from "node:path";
 import type { PrinterConfig, TenantConfig } from "./config";
 import { getPrinterConfig, hasConfig, loadConfig, resetConfig, saveConfig, updatePrinterConfig } from "./config";
 import { installKiosk, type KioskController } from "./kiosk";
-import { closePrinter, listPorts, sendBytes } from "./printer";
+import { closePrinter, listPorts, sendBytes, warmUpPrinter } from "./printer";
 import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
 import { resolveTenant, type ResolveData } from "./resolve";
 import { buildTenantUrl } from "./url";
@@ -252,6 +252,16 @@ app.whenReady().then(async () => {
   // 이미 디스크 캐시에 박힌 휴리스틱 stale 항목 evict — 이후 no-store가 재캐싱 차단.
   await session.defaultSession.clearCache();
   createWindow();
+  // 부팅 시 프린터 자가복구 — 일체형 단말 재실행 후 자동 출력이 안 되는 문제 방지.
+  // 운영자가 진단 단축키를 누르지 않아도 설정된 포트를 자동으로 열고 enabled를 복구한다.
+  // 비동기·비차단: 실패해도 로그만 남기고 부팅 흐름을 막지 않는다(다이얼로그 없음).
+  warmUpPrinter()
+    .then((r) => {
+      if (r.skipped) return;
+      if (r.ok) console.log(`printer warmup ok: ${r.com} (enabled)`);
+      else console.warn(`printer warmup failed: ${r.com ?? "?"} — ${r.error}`);
+    })
+    .catch((err) => console.warn("printer warmup error:", err));
   globalShortcut.register("Control+Shift+K", () => kiosk?.requestEnter());
   // 새로고침 — 캐시를 무시하는 하드 리로드(메인 프레임 + jarvis iframe 포함).
   // 외부 리소스가 stale일 때 재시작 없이 즉시 갱신하는 운영자용 단축키.
