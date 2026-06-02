@@ -133,6 +133,8 @@ export interface ReceiptData {
   qrCaption?: string;
   /** 매장용/고객용 등 사본 라벨 */
   copyLabel?: string;
+  /** 접수증 포맷 — "counter"이면 담당자 수기 기입란 노출 */
+  receiptFormat?: "counter" | "privacy";
 }
 
 function formatPrice(n: number): string {
@@ -208,6 +210,14 @@ export function buildReceipt(d: ReceiptData): Buffer {
 
   if (d.paymentMethod) {
     parts.push(line(`결제수단: ${d.paymentMethod}`));
+  }
+
+  // 담당자 수기 기입란 (counter 포맷)
+  if (d.receiptFormat === "counter") {
+    parts.push(divider());
+    parts.push(line("담당자"));
+    parts.push(cmd.feed(1));
+    parts.push(divider("_"));
   }
 
   // QR
