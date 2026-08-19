@@ -7,6 +7,7 @@ import { installKiosk, type KioskController } from "./kiosk";
 import { closePrinter, listPorts, sendBytes, warmUpPrinter } from "./printer";
 import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
 import { resolveTenant, type ResolveData } from "./resolve";
+import { createTerminalAdapter, type TerminalApproveRequest } from "./terminal";
 import { buildTenantUrl } from "./url";
 import { BASE_URL } from "./env";
 
@@ -96,6 +97,25 @@ ipcMain.handle("tenant:reset", () => {
   app.relaunch();
   app.exit(0);
 });
+
+// 카드단말(VAN 직결) — 어댑터가 있을 때만 preload 가 window.terminal 을 노출한다.
+// 승인/취소는 예외를 그대로 던져 renderer 쪽에서 실패 UI 로 처리하게 한다.
+const terminalAdapter = createTerminalAdapter();
+
+ipcMain.on("terminal:available", (event) => {
+  event.returnValue = Boolean(terminalAdapter);
+});
+
+function requireTerminal() {
+  if (!terminalAdapter) throw new Error("card terminal adapter not available");
+  return terminalAdapter;
+}
+
+ipcMain.handle("terminal:approve", (_e, req: TerminalApproveRequest) => requireTerminal().approve(req));
+ipcMain.handle("terminal:cancel", (_e, pgCno: string, reason: string) => requireTerminal().cancel(pgCno, reason));
+ipcMain.handle("terminal:inquire", (_e, pgCno: string) => requireTerminal().inquire(pgCno));
+ipcMain.handle("terminal:reverse-last", () => requireTerminal().reverseLast());
+ipcMain.handle("terminal:ping", () => requireTerminal().ping());
 
 ipcMain.handle("printer:get-config", () => getPrinterConfig());
 
