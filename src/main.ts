@@ -7,7 +7,7 @@ import { installKiosk, type KioskController } from "./kiosk";
 import { closePrinter, listPorts, sendBytes, warmUpPrinter } from "./printer";
 import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
 import { resolveTenant, type ResolveData } from "./resolve";
-import { createTerminalAdapter, type TerminalApproveRequest } from "./terminal";
+import { createTerminalAdapter, fetchTerminalServerConfig, type TerminalApproveRequest } from "./terminal";
 import { buildTenantUrl } from "./url";
 import { BASE_URL } from "./env";
 
@@ -100,7 +100,14 @@ ipcMain.handle("tenant:reset", () => {
 
 // 카드단말(VAN 직결) — 어댑터가 있을 때만 preload 가 window.terminal 을 노출한다.
 // 승인/취소는 예외를 그대로 던져 renderer 쪽에서 실패 UI 로 처리하게 한다.
-const terminalAdapter = createTerminalAdapter();
+// MID/TID 는 서버(웹 관리자)가 진실 소스 — 어댑터가 승인 시점마다 조회한다.
+const terminalAdapter = createTerminalAdapter({
+  getServerConfig: () => {
+    const cfg = loadConfig();
+    if (!cfg) return Promise.resolve(null);
+    return fetchTerminalServerConfig(cfg.baseUrl, cfg.tenantName);
+  },
+});
 
 ipcMain.on("terminal:available", (event) => {
   event.returnValue = Boolean(terminalAdapter);
