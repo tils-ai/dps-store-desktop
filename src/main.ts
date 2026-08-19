@@ -124,6 +124,41 @@ ipcMain.handle("terminal:inquire", (_e, pgCno: string) => requireTerminal().inqu
 ipcMain.handle("terminal:reverse-last", () => requireTerminal().reverseLast());
 ipcMain.handle("terminal:ping", () => requireTerminal().ping());
 
+/** 카드단말 진단 다이얼로그 — 어댑터 상태 + 서버 설정(MID/TID) 확인. 현장 설치 점검용 */
+async function showTerminalDiagnostics(): Promise<void> {
+  if (!mainWindow) return;
+
+  let adapterLine = "어댑터 없음 — window.terminal 미노출 (VAN 모듈 연동 전 정상)";
+  if (terminalAdapter) {
+    const label = process.env.DPS_TERMINAL_MOCK === "1" ? "MOCK (실 결제 아님)" : "VAN";
+    try {
+      const ping = await terminalAdapter.ping();
+      adapterLine = `어댑터: ${label} · 리더기 연결: ${ping.connected ? "정상" : "끊김"}${
+        ping.firmware ? ` · fw ${ping.firmware}` : ""
+      }`;
+    } catch (err) {
+      adapterLine = `어댑터: ${label} · 응답 실패: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  const cfg = loadConfig();
+  const serverCfg = cfg ? await fetchTerminalServerConfig(cfg.baseUrl, cfg.tenantName) : null;
+  const serverLines = serverCfg
+    ? [
+        `사용: ${serverCfg.enabled ? "ON" : "OFF"} · 사업자: ${serverCfg.provider}`,
+        `MID: ${serverCfg.mid || "(미입력)"} · TID: ${serverCfg.tid || "(미입력)"}`,
+        `단말 이름: ${serverCfg.terminalName || "-"}`,
+      ]
+    : ["서버 설정 조회 실패 — 이 단말이 주문 단말로 등록되어 있는지 확인하세요."];
+
+  await dialog.showMessageBox(mainWindow, {
+    type: "info",
+    title: "카드단말 진단",
+    message: adapterLine,
+    detail: serverLines.join("\n"),
+  });
+}
+
 ipcMain.handle("printer:get-config", () => getPrinterConfig());
 
 ipcMain.handle("printer:set-config", (_e, patch: unknown) => {
@@ -303,6 +338,10 @@ app.whenReady().then(async () => {
   // 진단용 — 샘플 접수증을 현재 설정의 프린터로 1장 출력. 단말 설치 후 인터페이스 점검에 사용.
   globalShortcut.register("Control+Shift+Alt+P", () => {
     printTestReceipt().catch((err) => console.warn("test print failed:", err));
+  });
+  // 진단용 — 카드단말 어댑터 상태 + 서버 설정(MID/TID) 확인. 리더기 설치 점검에 사용.
+  globalShortcut.register("Control+Shift+Alt+T", () => {
+    showTerminalDiagnostics().catch((err) => console.warn("terminal diagnostics failed:", err));
   });
   // 패키지된 빌드에서만 동작. dev/unsigned macOS는 NoOp 또는 실패하나 무해.
   autoUpdater.checkForUpdatesAndNotify().catch((err) => {
