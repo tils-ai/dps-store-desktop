@@ -2,7 +2,15 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, session, shell } f
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import type { PrinterConfig, TenantConfig } from "./config";
-import { getPrinterConfig, hasConfig, loadConfig, resetConfig, saveConfig, updatePrinterConfig } from "./config";
+import {
+  getPrinterConfig,
+  getTerminalConfig,
+  hasConfig,
+  loadConfig,
+  resetConfig,
+  saveConfig,
+  updatePrinterConfig,
+} from "./config";
 import { installKiosk, type KioskController } from "./kiosk";
 import { closePrinter, listPorts, sendBytes, warmUpPrinter } from "./printer";
 import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
@@ -107,6 +115,7 @@ const terminalAdapter = createTerminalAdapter({
     if (!cfg) return Promise.resolve(null);
     return fetchTerminalServerConfig(cfg.baseUrl, cfg.tenantName);
   },
+  local: getTerminalConfig(),
 });
 
 ipcMain.on("terminal:available", (event) => {

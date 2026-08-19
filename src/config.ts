@@ -9,6 +9,13 @@ export interface PrinterConfig {
   enabled: boolean;
 }
 
+export interface TerminalConfig {
+  /** 카드단말 승인 데몬(KSnCAT) 인터페이스 포트 (0 = 미설정 → 단말 결제 비활성) */
+  port: number;
+  /** 승인 데몬 호스트 (기본 로컬) */
+  host: string;
+}
+
 export interface TenantConfig {
   id: string;
   tenantName: string;
@@ -20,6 +27,8 @@ export interface TenantConfig {
   schemaVersion: 1;
   /** 키오스크 접수증 프린터 설정. 미설정 시 출력 비활성 */
   printer?: PrinterConfig;
+  /** 카드단말(VAN 직결) 설정. 미설정 시 단말 결제 비활성 */
+  terminal?: TerminalConfig;
 }
 
 interface Schema {
@@ -32,6 +41,11 @@ export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
   com: "COM2",
   baud: 9600,
   enabled: false,
+};
+
+export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
+  port: 0,
+  host: "127.0.0.1",
 };
 
 export function loadConfig(): TenantConfig | null {
@@ -62,4 +76,18 @@ export function updatePrinterConfig(patch: Partial<PrinterConfig>): PrinterConfi
 export function getPrinterConfig(): PrinterConfig {
   const tenant = loadConfig();
   return { ...DEFAULT_PRINTER_CONFIG, ...(tenant?.printer ?? {}) };
+}
+
+/** terminal 설정만 부분 업데이트. tenant config가 없으면 no-op */
+export function updateTerminalConfig(patch: Partial<TerminalConfig>): TerminalConfig | null {
+  const tenant = loadConfig();
+  if (!tenant) return null;
+  const next: TerminalConfig = { ...DEFAULT_TERMINAL_CONFIG, ...tenant.terminal, ...patch };
+  saveConfig({ ...tenant, terminal: next });
+  return next;
+}
+
+export function getTerminalConfig(): TerminalConfig {
+  const tenant = loadConfig();
+  return { ...DEFAULT_TERMINAL_CONFIG, ...(tenant?.terminal ?? {}) };
 }
