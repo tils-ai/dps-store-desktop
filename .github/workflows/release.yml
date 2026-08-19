@@ -13,7 +13,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # windows-latest(2025+) 이미지의 VS 버전을 node-gyp@9가 인식 못 해
+        # serialport 네이티브 리빌드가 실패한다 — VS2022 이미지로 고정.
+        os: [windows-2022, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
