@@ -7,6 +7,7 @@ export type { TerminalAdapter } from "./types";
 export type {
   TerminalApproveRequest,
   TerminalApproveResult,
+  TerminalCancelOriginal,
   TerminalCancelResult,
   TerminalTradeStatus,
 } from "./types";

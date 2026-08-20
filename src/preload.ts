@@ -6,6 +6,7 @@ import type {
   TerminalAdapter,
   TerminalApproveRequest,
   TerminalApproveResult,
+  TerminalCancelOriginal,
   TerminalCancelResult,
   TerminalTradeStatus,
 } from "./terminal/types";
@@ -57,8 +58,8 @@ if (terminalAvailable) {
   const terminal: TerminalAdapter = {
     approve: (req: TerminalApproveRequest): Promise<TerminalApproveResult> =>
       ipcRenderer.invoke("terminal:approve", req),
-    cancel: (pgCno: string, reason: string): Promise<TerminalCancelResult> =>
-      ipcRenderer.invoke("terminal:cancel", pgCno, reason),
+    cancel: (pgCno: string, reason: string, original?: TerminalCancelOriginal): Promise<TerminalCancelResult> =>
+      ipcRenderer.invoke("terminal:cancel", pgCno, reason, original),
     inquire: (pgCno: string): Promise<TerminalTradeStatus> => ipcRenderer.invoke("terminal:inquire", pgCno),
     reverseLast: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("terminal:reverse-last"),
     ping: (): Promise<{ connected: boolean; firmware?: string }> => ipcRenderer.invoke("terminal:ping"),

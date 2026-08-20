@@ -32,6 +32,20 @@ export interface TerminalApproveResult {
   raw: unknown;
 }
 
+/**
+ * 취소 원거래 정보 — KSnCAT 취소 전문(0420)의 원거래 키 (전문 순번 26·27).
+ * 서버가 승인 시 저장한 pgResponse(승인번호·승인일시·금액)에서 만들어 전달한다.
+ * 미전달 시 직전 거래(프로세스 메모리)만 취소 가능.
+ */
+export interface TerminalCancelOriginal {
+  /** 원거래 승인번호 (12자리 이내) */
+  approvalNo: string;
+  /** 원거래 승인일자 (YYMMDD) */
+  approvalDate: string;
+  /** 원거래 승인금액 (원) */
+  amount: number;
+}
+
 /** 취소 결과 */
 export interface TerminalCancelResult {
   pgCno: string;
@@ -49,7 +63,8 @@ export interface TerminalTradeStatus {
 /** 카드단말 어댑터 — 구현체: mock (개발/시연), VAN 모듈 연동 (추후) */
 export interface TerminalAdapter {
   approve(req: TerminalApproveRequest): Promise<TerminalApproveResult>;
-  cancel(pgCno: string, reason: string): Promise<TerminalCancelResult>;
+  /** 취소 — original 미전달 시 직전 거래만, 전달 시 임의 과거 거래 취소 (카드 재제시 요구 여부는 실기 확인) */
+  cancel(pgCno: string, reason: string, original?: TerminalCancelOriginal): Promise<TerminalCancelResult>;
   inquire(pgCno: string): Promise<TerminalTradeStatus>;
   /** 망취소 — 승인 직후 통신 단절 시 직전 거래 취소 */
   reverseLast(): Promise<{ ok: boolean }>;

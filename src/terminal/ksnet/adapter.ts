@@ -4,6 +4,7 @@ import type {
   TerminalAdapter,
   TerminalApproveRequest,
   TerminalApproveResult,
+  TerminalCancelOriginal,
   TerminalCancelResult,
   TerminalTradeStatus,
 } from "../types";
@@ -133,21 +134,28 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
       };
     },
 
-    async cancel(pgCno: string, _reason: string): Promise<TerminalCancelResult> {
+    async cancel(pgCno: string, _reason: string, original?: TerminalCancelOriginal): Promise<TerminalCancelResult> {
       const { tid } = await requireTid();
-      // 오프라인 카드 취소는 원거래 승인번호/일자가 필요하다. 현재는 직전 거래만 지원 —
-      // 임의 거래 취소 UX 는 실기 검증 단계에서 원거래 정보 전달 방식과 함께 확정한다.
-      if (!lastTx || (pgCno && lastTx.vanTr !== pgCno)) {
-        throw new Error("취소할 원거래 정보를 찾을 수 없습니다 (직전 거래만 취소 가능)");
+      // 취소 전문(0420)의 원거래 키는 승인번호 + 승인일자(YYMMDD) — KSnCAT 연동 전문 순번 26·27.
+      // 호출자가 서버 pgResponse 기반 원거래 정보를 넘기면 임의 과거 거래도 취소하고,
+      // 없으면 직전 거래(프로세스 메모리)로 폴백한다.
+      // 미확인(실기): 취소 시 KSnCAT 이 카드 재제시를 요구하는지 — 무카드 취소 허용 여부에 따라 취소 UX 가 갈린다.
+      const orig =
+        original ??
+        (lastTx && (!pgCno || lastTx.vanTr === pgCno)
+          ? { approvalNo: lastTx.approvalNo, approvalDate: lastTx.approvalDate, amount: lastTx.amount }
+          : null);
+      if (!orig) {
+        throw new Error("취소할 원거래 정보를 찾을 수 없습니다 (원거래 승인번호·승인일자 전달 필요)");
       }
 
       const telegram = buildApprovalTelegram({
         telegramType: "0420",
         tid,
         serial: makeSerial(),
-        amount: lastTx.amount,
-        originalApprovalNo: lastTx.approvalNo,
-        originalApprovalDate: lastTx.approvalDate,
+        amount: orig.amount,
+        originalApprovalNo: orig.approvalNo,
+        originalApprovalDate: orig.approvalDate,
       });
 
       const response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));
@@ -156,7 +164,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         throw new Error(reason || `취소 거절 (${response.responseCode})`);
       }
 
-      lastTx = null;
+      if (lastTx && lastTx.approvalNo === orig.approvalNo) lastTx = null;
       return { pgCno: response.vanTr || pgCno, cancelledAt: new Date().toISOString(), raw: response.raw };
     },
 

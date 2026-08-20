@@ -15,7 +15,12 @@ import { installKiosk, type KioskController } from "./kiosk";
 import { closePrinter, listPorts, sendBytes, warmUpPrinter } from "./printer";
 import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
 import { resolveTenant, type ResolveData } from "./resolve";
-import { createTerminalAdapter, fetchTerminalServerConfig, type TerminalApproveRequest } from "./terminal";
+import {
+  createTerminalAdapter,
+  fetchTerminalServerConfig,
+  type TerminalApproveRequest,
+  type TerminalCancelOriginal,
+} from "./terminal";
 import { buildTenantUrl } from "./url";
 import { BASE_URL } from "./env";
 
@@ -128,7 +133,9 @@ function requireTerminal() {
 }
 
 ipcMain.handle("terminal:approve", (_e, req: TerminalApproveRequest) => requireTerminal().approve(req));
-ipcMain.handle("terminal:cancel", (_e, pgCno: string, reason: string) => requireTerminal().cancel(pgCno, reason));
+ipcMain.handle("terminal:cancel", (_e, pgCno: string, reason: string, original?: TerminalCancelOriginal) =>
+  requireTerminal().cancel(pgCno, reason, original),
+);
 ipcMain.handle("terminal:inquire", (_e, pgCno: string) => requireTerminal().inquire(pgCno));
 ipcMain.handle("terminal:reverse-last", () => requireTerminal().reverseLast());
 ipcMain.handle("terminal:ping", () => requireTerminal().ping());
