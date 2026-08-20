@@ -4,7 +4,7 @@ import { createMockAdapter } from "./mock-adapter";
 import type { TerminalServerConfig } from "./server-config";
 import type { TerminalAdapter } from "./types";
 
-export { createApprovalJournal, type ApprovalJournal } from "./approval-journal";
+export { createApprovalJournal, createSerialGenerator, type ApprovalJournal } from "./approval-journal";
 export { startApprovalRecovery } from "./recovery";
 
 export type { TerminalAdapter } from "./types";
@@ -26,6 +26,8 @@ export interface TerminalAdapterDeps {
   getWindowHandle?: () => string | null;
   /** 승인 저널 — 승인 생애 영속화 (크래시·재시작 복구용) */
   journal?: ApprovalJournal;
+  /** 전문일련번호 생성기 — 영속 카운터 주입 (미지정 시 시간 기반) */
+  nextSerial?: () => string;
 }
 
 /**
@@ -57,6 +59,7 @@ export function createTerminalAdapter(deps: TerminalAdapterDeps): TerminalAdapte
       taxMode: deps.local.taxMode,
       getWindowHandle: deps.getWindowHandle,
       journal: deps.journal,
+      nextSerial: deps.nextSerial,
     });
   }
 
