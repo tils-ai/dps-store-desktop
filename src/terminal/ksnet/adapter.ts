@@ -29,6 +29,12 @@ export interface KsnetAdapterOptions {
   shortTimeoutMs?: number;
   /** 서버(웹 관리자) 설정 조회 — 승인 시점마다 TID 를 받아온다 */
   getServerConfig: () => Promise<TerminalServerConfig | null>;
+  /** 전자서명 유무 — "X": 무서명(기본), "K": KSnCAT 서명창, "T": 화면터치, " ": KSnCAT 설정 위임 */
+  signMode?: "X" | "K" | "T" | " ";
+  /** 부가세 필드 — "kscat": 0 전송(KSnCAT 자동부가세 위임, 기본), "explicit": 과세분 계산해 전송 */
+  taxMode?: "kscat" | "explicit";
+  /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND, 십진수 문자열) — 없으면 공백 전송 */
+  getWindowHandle?: () => string | null;
 }
 
 const APPROVE_TIMEOUT_MS = 90_000; // 카드 삽입 대기 포함
@@ -78,10 +84,24 @@ function exchange(host: string, port: number, payload: Buffer, timeoutMs: number
   });
 }
 
+/**
+ * 부가세 명시 전송 시 계산 — 과세분(총액-면세)을 공급가액 1.1 배 포함으로 역산.
+ * 공급가액 = round(과세분 / 1.1), 부가세 = 과세분 - 공급가액.
+ * KSnCAT 자동부가세 계산식과 일치하는지, 전표 표기와 맞는지는 실기 확인.
+ */
+function computeTax(amount: number, taxFreeAmount: number): { tax: number; supplyAmount: number } {
+  const taxable = Math.max(0, amount - taxFreeAmount);
+  const supplyAmount = Math.round(taxable / 1.1);
+  return { tax: taxable - supplyAmount, supplyAmount };
+}
+
 export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapter {
-  const { host, port, getServerConfig } = options;
+  const { host, port, getServerConfig, getWindowHandle } = options;
   const approveTimeout = options.approveTimeoutMs ?? APPROVE_TIMEOUT_MS;
   const shortTimeout = options.shortTimeoutMs ?? SHORT_TIMEOUT_MS;
+  const signMode = options.signMode ?? "X";
+  const taxMode = options.taxMode ?? "kscat";
+  const swModelNo = () => getWindowHandle?.() ?? "";
 
   // 망취소(reverseLast)용 직전 거래 보관 — 프로세스 메모리 한정
   let lastTx: LastTransaction | null = null;
@@ -98,13 +118,18 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
       const { tid } = await requireTid();
       const serial = makeSerial();
 
+      const taxFreeAmount = req.taxFreeAmount ?? 0;
+      const taxFields = taxMode === "explicit" ? computeTax(req.amount, taxFreeAmount) : {};
       const telegram = buildApprovalTelegram({
         telegramType: "0200",
         tid,
         serial,
         amount: req.amount,
         installment: req.installment ?? 0,
-        taxFreeAmount: req.taxFreeAmount ?? 0,
+        taxFreeAmount,
+        signMode,
+        swModelNo: swModelNo(),
+        ...taxFields,
       });
 
       const response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));
@@ -149,13 +174,19 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         throw new Error("취소할 원거래 정보를 찾을 수 없습니다 (원거래 승인번호·승인일자 전달 필요)");
       }
 
+      // 부분취소(7420): cancelAmount 가 원거래 금액 미만일 때. 총금액 필드에 취소할 금액을 넣는다.
+      const cancelAmount = original?.cancelAmount ?? orig.amount;
+      if (cancelAmount > orig.amount) throw new Error("취소 금액이 원거래 승인금액을 초과합니다");
+      const isPartial = cancelAmount < orig.amount;
+
       const telegram = buildApprovalTelegram({
-        telegramType: "0420",
+        telegramType: isPartial ? "7420" : "0420",
         tid,
         serial: makeSerial(),
-        amount: orig.amount,
+        amount: cancelAmount,
         originalApprovalNo: orig.approvalNo,
         originalApprovalDate: orig.approvalDate,
+        swModelNo: swModelNo(),
       });
 
       const response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));
@@ -164,7 +195,8 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         throw new Error(reason || `취소 거절 (${response.responseCode})`);
       }
 
-      if (lastTx && lastTx.approvalNo === orig.approvalNo) lastTx = null;
+      // 부분취소는 원거래가 잔액으로 살아 있으므로 직전 거래 보관을 유지한다
+      if (!isPartial && lastTx && lastTx.approvalNo === orig.approvalNo) lastTx = null;
       return { pgCno: response.vanTr || pgCno, cancelledAt: new Date().toISOString(), raw: response.raw };
     },
 
@@ -188,6 +220,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         amount: lastTx.amount,
         originalApprovalNo: lastTx.approvalNo,
         originalApprovalDate: lastTx.approvalDate,
+        swModelNo: swModelNo(),
       });
 
       const response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));

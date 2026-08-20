@@ -25,7 +25,7 @@ function numeric(value: number | string, length: number): Buffer {
   return Buffer.from(s.padStart(length, "0"), "ascii");
 }
 
-export type ApprovalTelegramType = "0200" | "0420" | "0460";
+export type ApprovalTelegramType = "0200" | "0420" | "7420" | "0460";
 
 export interface ApprovalRequestFields {
   telegramType: ApprovalTelegramType;
@@ -43,6 +43,12 @@ export interface ApprovalRequestFields {
   originalApprovalNo?: string;
   /** 취소/망취소 시 원거래 승인일자 (YYMMDD) */
   originalApprovalDate?: string;
+  /** 세금(부가세) — 0 이면 KSnCAT 자동부가세 설정에 위임 */
+  tax?: number;
+  /** 공급금액 — 0 이면 KSnCAT 자동부가세 설정에 위임 */
+  supplyAmount?: number;
+  /** SW 모델번호 — 키오스크 연동 모드에서 결제창 부모 윈도우 핸들 (십진수 문자열, 형식은 실기 확인) */
+  swModelNo?: string;
   /**
    * 전자서명 유무 — 공백: KSnCAT 설정에 따름, "X": 무서명, "K": KSnCAT 서명창 사용
    * 무인 키오스크는 보통 "X"(무서명) 또는 KSnCAT 설정 위임을 쓴다.
@@ -65,7 +71,7 @@ export function buildApprovalTelegram(f: ApprovalRequestFields): Buffer {
     fixed("", 20), // 거래고유번호
     fixed("", 20), // 카드번호 (KSnCAT 리더기 입력)
     fixed("K", 1), // 암호화 여부: 키오스크 연동 모드
-    fixed("", 16), // SW 모델번호 (키오스크 모드 윈도우 핸들 — 실기 검증 시 필요하면 셋)
+    fixed(f.swModelNo ?? "", 16), // SW 모델번호 (키오스크 모드 윈도우 핸들)
     fixed("", 16), // CAT or Reader 모델번호
     fixed("", 40), // 암호화 정보
     fixed("", 37), // Track II
@@ -73,8 +79,8 @@ export function buildApprovalTelegram(f: ApprovalRequestFields): Buffer {
     numeric(f.installment ?? 0, 2), // 할부개월
     numeric(f.amount, 12), // 총금액
     numeric(0, 12), // 봉사료
-    numeric(0, 12), // 세금(부가세) — KSnCAT 자동부가세 설정 사용
-    numeric(0, 12), // 공급금액
+    numeric(f.tax ?? 0, 12), // 세금(부가세) — 0 이면 KSnCAT 자동부가세 설정 사용
+    numeric(f.supplyAmount ?? 0, 12), // 공급금액 — 0 이면 KSnCAT 자동부가세 설정 사용
     numeric(f.taxFreeAmount ?? 0, 12), // 면세금액
     fixed("", 2), // Working Key Index
     fixed("", 16), // 비밀번호

@@ -44,6 +44,8 @@ export interface TerminalCancelOriginal {
   approvalDate: string;
   /** 원거래 승인금액 (원) */
   amount: number;
+  /** 부분취소 금액 (원) — 지정 시 부분취소 전문(7420), 미지정·전액이면 취소 전문(0420) */
+  cancelAmount?: number;
 }
 
 /** 취소 결과 */
