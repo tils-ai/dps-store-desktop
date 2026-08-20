@@ -17,6 +17,7 @@ import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
 import { resolveTenant, type ResolveData } from "./resolve";
 import {
   createApprovalJournal,
+  createSerialGenerator,
   createTerminalAdapter,
   fetchTerminalServerConfig,
   startApprovalRecovery,
@@ -121,6 +122,7 @@ ipcMain.handle("tenant:reset", () => {
 const approvalJournal = createApprovalJournal();
 const terminalAdapter = createTerminalAdapter({
   journal: approvalJournal,
+  nextSerial: createSerialGenerator(),
   getServerConfig: () => {
     const cfg = loadConfig();
     if (!cfg) return Promise.resolve(null);
@@ -205,7 +207,7 @@ async function showTerminalDiagnostics(): Promise<void> {
   }
 
   const cfg = loadConfig();
-  const serverCfg = cfg ? await fetchTerminalServerConfig(cfg.baseUrl, cfg.tenantName) : null;
+  const serverCfg = cfg ? await fetchTerminalServerConfig(cfg.baseUrl, cfg.tenantName).catch(() => null) : null;
   const serverLines = serverCfg
     ? [
         `사용: ${serverCfg.enabled ? "ON" : "OFF"} · 사업자: ${serverCfg.provider}`,

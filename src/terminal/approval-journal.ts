@@ -37,6 +37,25 @@ export type PendingApproval =
 
 interface JournalSchema {
   pending?: PendingApproval;
+  /** 전문일련번호 영속 카운터 — 같은 초·재시작 중복 방지 */
+  serialSeq?: number;
+}
+
+/**
+ * 전문일련번호 생성기 — yyMMdd(6) + 영속 카운터(6자리 순환).
+ * 시간 기반(초 단위)은 같은 초의 두 거래·재시작 직후 재실행에서 중복될 수 있어,
+ * 디스크 카운터로 단말 수명 전체에서 단조 증가를 보장한다 (KSnCAT 전문 스펙상 가맹점 임의 필드).
+ */
+export function createSerialGenerator(): () => string {
+  const store = new Store<JournalSchema>({ name: "terminal-journal" });
+  return () => {
+    const seq = ((store.get("serialSeq") ?? 0) % 999_999) + 1;
+    store.set("serialSeq", seq);
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const date = `${String(now.getFullYear() % 100).padStart(2, "0")}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    return `${date}${String(seq).padStart(6, "0")}`;
+  };
 }
 
 export interface ApprovalJournal {
