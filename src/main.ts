@@ -121,6 +121,12 @@ const terminalAdapter = createTerminalAdapter({
     return fetchTerminalServerConfig(cfg.baseUrl, cfg.tenantName);
   },
   local: getTerminalConfig(),
+  getWindowHandle: () => {
+    // 키오스크 연동 모드(암호화 여부 "K")의 SW 모델번호 = 결제창 부모 윈도우 핸들.
+    // HWND LE 버퍼 → 부호 없는 십진수 문자열 가정 — 형식·필요 여부는 실기 확인.
+    if (process.platform !== "win32" || !mainWindow || mainWindow.isDestroyed()) return null;
+    return mainWindow.getNativeWindowHandle().readUInt32LE(0).toString();
+  },
 });
 
 ipcMain.on("terminal:available", (event) => {

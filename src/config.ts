@@ -14,6 +14,10 @@ export interface TerminalConfig {
   port: number;
   /** 승인 데몬 호스트 (기본 로컬) */
   host: string;
+  /** 전자서명 유무 — "X": 무서명(기본), "K": KSnCAT 서명창, "T": 화면터치, " ": KSnCAT 설정 위임 */
+  signMode?: "X" | "K" | "T" | " ";
+  /** 부가세 필드 — "kscat": KSnCAT 자동부가세 위임(기본), "explicit": 과세분 계산해 전송 */
+  taxMode?: "kscat" | "explicit";
 }
 
 export interface TenantConfig {
