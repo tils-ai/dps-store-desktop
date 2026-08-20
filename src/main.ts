@@ -21,6 +21,7 @@ import {
   type TerminalApproveRequest,
   type TerminalCancelOriginal,
 } from "./terminal";
+import { startCancelPoller } from "./terminal/cancel-poller";
 import { startTerminalHeartbeat } from "./terminal/heartbeat";
 import { buildTenantUrl } from "./url";
 import { BASE_URL } from "./env";
@@ -134,15 +135,14 @@ ipcMain.on("terminal:available", (event) => {
   event.returnValue = Boolean(terminalAdapter);
 });
 
-// 카드단말 하트비트 — 어댑터가 있을 때만 (관리자 카드단말 탭 상태 표시용)
+// 카드단말 하트비트 + 원격 취소 폴러 — 어댑터가 있을 때만
 if (terminalAdapter) {
-  startTerminalHeartbeat({
-    adapter: terminalAdapter,
-    getTarget: () => {
-      const cfg = loadConfig();
-      return cfg ? { baseUrl: cfg.baseUrl, tenantName: cfg.tenantName } : null;
-    },
-  });
+  const getTarget = () => {
+    const cfg = loadConfig();
+    return cfg ? { baseUrl: cfg.baseUrl, tenantName: cfg.tenantName } : null;
+  };
+  startTerminalHeartbeat({ adapter: terminalAdapter, getTarget });
+  startCancelPoller({ adapter: terminalAdapter, getTarget });
 }
 
 function requireTerminal() {
