@@ -20,16 +20,17 @@ export interface TerminalServerConfig {
   remoteCancelEnabled?: boolean;
 }
 
+/**
+ * 서버 카드단말 설정 조회.
+ * - null: 서버가 정상 응답했지만 이 단말 설정이 없음 (미등록·미설정 — "비활성" 안내가 맞다)
+ * - throw: 네트워크·타임아웃 오류 — 호출자가 "서버 연결 실패"로 구분해 안내한다
+ */
 export async function fetchTerminalServerConfig(
   baseUrl: string,
   tenantName: string,
 ): Promise<TerminalServerConfig | null> {
-  try {
-    const url = `${baseUrl}/api/terminal/config?tenant=${encodeURIComponent(tenantName)}`;
-    const res = await net.fetch(url, { credentials: "include" });
-    if (!res.ok) return null;
-    return (await res.json()) as TerminalServerConfig;
-  } catch {
-    return null;
-  }
+  const url = `${baseUrl}/api/terminal/config?tenant=${encodeURIComponent(tenantName)}`;
+  const res = await net.fetch(url, { credentials: "include", signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) return null;
+  return (await res.json()) as TerminalServerConfig;
 }

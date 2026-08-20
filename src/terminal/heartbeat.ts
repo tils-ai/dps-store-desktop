@@ -14,19 +14,26 @@ export interface HeartbeatDeps {
 }
 
 export function startTerminalHeartbeat(deps: HeartbeatDeps): NodeJS.Timeout {
+  let running = false; // ping·POST 가 주기를 넘겨도 beat 가 중첩되지 않게
+
   const beat = async () => {
+    if (running) return;
     const target = deps.getTarget();
     if (!target) return;
+    running = true;
     try {
       const { connected } = await deps.adapter.ping();
       await net.fetch(`${target.baseUrl}/api/terminal/heartbeat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal: AbortSignal.timeout(10_000),
         body: JSON.stringify({ tenant: target.tenantName, connected }),
       });
     } catch {
       // 서버 미도달 — 다음 주기에 재시도 (하트비트 공백 자체가 상태 신호다)
+    } finally {
+      running = false;
     }
   };
 

@@ -41,7 +41,7 @@ export function startCancelPoller(deps: CancelPollerDeps): NodeJS.Timeout {
     try {
       const listRes = await net.fetch(
         `${target.baseUrl}/api/terminal/cancel-requests?tenant=${encodeURIComponent(target.tenantName)}`,
-        { credentials: "include" },
+        { credentials: "include", signal: AbortSignal.timeout(15_000) },
       );
       if (!listRes.ok) return;
       const { requests } = (await listRes.json()) as { requests: PendingCancelRequest[] };
@@ -67,6 +67,7 @@ export function startCancelPoller(deps: CancelPollerDeps): NodeJS.Timeout {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
+          signal: AbortSignal.timeout(15_000),
           body: JSON.stringify({ tenant: target.tenantName, ok, cancelResult, message }),
         });
       }
