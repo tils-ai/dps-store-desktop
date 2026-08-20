@@ -6,6 +6,8 @@
 export interface TerminalApproveRequest {
   amount: number;
   orderNo: string;
+  /** dps-store 주문 ID — 셸이 미반영 승인을 직접 서버 반영(복구)할 때 필요 */
+  orderId?: string;
   /** 할부 개월 (0 = 일시불) */
   installment?: number;
   /** 면세 금액 */

@@ -25,7 +25,8 @@ function numeric(value: number | string, length: number): Buffer {
   return Buffer.from(s.padStart(length, "0"), "ascii");
 }
 
-export type ApprovalTelegramType = "0200" | "0420" | "7420" | "0460";
+// 0440: 승인번호 없는 망취소 — 결과불명 거래(크래시·통신 단절)를 전문일련번호로 취소한다
+export type ApprovalTelegramType = "0200" | "0420" | "7420" | "0440" | "0460";
 
 export interface ApprovalRequestFields {
   telegramType: ApprovalTelegramType;
