@@ -1,7 +1,11 @@
+import type { ApprovalJournal } from "./approval-journal";
 import { createKsnetAdapter } from "./ksnet/adapter";
 import { createMockAdapter } from "./mock-adapter";
 import type { TerminalServerConfig } from "./server-config";
 import type { TerminalAdapter } from "./types";
+
+export { createApprovalJournal, type ApprovalJournal } from "./approval-journal";
+export { startApprovalRecovery } from "./recovery";
 
 export type { TerminalAdapter } from "./types";
 export type {
@@ -20,6 +24,8 @@ export interface TerminalAdapterDeps {
   local: { host: string; port: number; signMode?: "X" | "K" | "T" | " "; taxMode?: "kscat" | "explicit" };
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND 십진수 문자열) */
   getWindowHandle?: () => string | null;
+  /** 승인 저널 — 승인 생애 영속화 (크래시·재시작 복구용) */
+  journal?: ApprovalJournal;
 }
 
 /**
@@ -50,6 +56,7 @@ export function createTerminalAdapter(deps: TerminalAdapterDeps): TerminalAdapte
       signMode: deps.local.signMode,
       taxMode: deps.local.taxMode,
       getWindowHandle: deps.getWindowHandle,
+      journal: deps.journal,
     });
   }
 

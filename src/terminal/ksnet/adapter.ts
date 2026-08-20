@@ -1,4 +1,5 @@
 import net from "node:net";
+import type { ApprovalJournal } from "../approval-journal";
 import type { TerminalServerConfig } from "../server-config";
 import type {
   TerminalAdapter,
@@ -35,6 +36,14 @@ export interface KsnetAdapterOptions {
   taxMode?: "kscat" | "explicit";
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND, 십진수 문자열) — 없으면 공백 전송 */
   getWindowHandle?: () => string | null;
+  /** 승인 저널 — 승인 생애를 내구 기록해 크래시·재시작 시 복구를 가능하게 한다 */
+  journal?: ApprovalJournal;
+}
+
+/** 데스크탑 전용 확장 — 복구 루프가 결과불명 거래를 망취소할 때 사용 */
+export interface KsnetAdapterExtras {
+  /** 승인번호 없는 망취소(0440) — 전문일련번호 기준. 결과불명 거래 정리용 */
+  reverseBySerial(serial: string, amount: number): Promise<{ ok: boolean; indeterminate?: boolean }>;
 }
 
 const APPROVE_TIMEOUT_MS = 90_000; // 카드 삽입 대기 포함
@@ -95,8 +104,8 @@ function computeTax(amount: number, taxFreeAmount: number): { tax: number; suppl
   return { tax: taxable - supplyAmount, supplyAmount };
 }
 
-export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapter {
-  const { host, port, getServerConfig, getWindowHandle } = options;
+export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapter & KsnetAdapterExtras {
+  const { host, port, getServerConfig, getWindowHandle, journal } = options;
   const approveTimeout = options.approveTimeoutMs ?? APPROVE_TIMEOUT_MS;
   const shortTimeout = options.shortTimeoutMs ?? SHORT_TIMEOUT_MS;
   const signMode = options.signMode ?? "X";
@@ -119,6 +128,26 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
   const resolveTaxMode = (cfg: TerminalServerConfig): "kscat" | "explicit" =>
     cfg.taxMode ? (cfg.taxMode === "explicit" ? "explicit" : "kscat") : taxMode;
 
+  /** 승인번호 없는 망취소(0440) — 전문일련번호로 결과불명 거래를 취소한다.
+   *  KSnCAT 이 확정 응답(O: 취소됨 / X·F: 원거래 없음 등)을 주면 정리된 것으로 보고,
+   *  통신 실패만 indeterminate 로 남긴다. */
+  async function reverseBySerial(serial: string, amount: number): Promise<{ ok: boolean; indeterminate?: boolean }> {
+    try {
+      const { tid } = await requireTid();
+      const telegram = buildApprovalTelegram({
+        telegramType: "0440",
+        tid,
+        serial,
+        amount,
+        swModelNo: swModelNo(),
+      });
+      const response = parseApprovalResponse(await exchange(host, port, telegram, shortTimeout));
+      return { ok: response.status === "O" };
+    } catch {
+      return { ok: false, indeterminate: true };
+    }
+  }
+
   return {
     async approve(req: TerminalApproveRequest): Promise<TerminalApproveResult> {
       const config = await requireTid();
@@ -139,9 +168,23 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         ...taxFields,
       });
 
-      const response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));
+      // 전문 송신 전 저널 기록 — 크래시로 결과를 모르게 되면 serial 로 망취소(0440)한다
+      journal?.begin({ orderId: req.orderId ?? "", orderNo: req.orderNo, amount: req.amount, serial });
+
+      let response;
+      try {
+        response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));
+      } catch (err) {
+        // 결과 불명(타임아웃·소켓 오류) — 즉시 망취소를 시도해 승인됐을 가능성을 제거한다.
+        // 망취소가 확정 응답을 받으면 저널을 지우고, 통신 자체가 안 되면 저널을 남겨
+        // 복구 루프가 이어서 정리한다 (그동안 새 승인은 차단됨).
+        const reversed = await reverseBySerial(serial, req.amount);
+        if (!reversed.indeterminate) journal?.clear();
+        throw err;
+      }
 
       if (response.status !== "O") {
+        journal?.clear(); // 명확한 거절 — 승인된 거래가 없다
         const reason = [response.message1, response.message2].filter(Boolean).join(" ");
         throw new Error(reason || `카드 승인 거절 (${response.responseCode})`);
       }
@@ -154,7 +197,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         vanTr: response.vanTr,
       };
 
-      return {
+      const result: TerminalApproveResult = {
         pgCno: response.vanTr || serial,
         approvalNo: response.approvalNo,
         cardNo: response.maskedCardNo,
@@ -164,6 +207,11 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         tid: response.tid || tid,
         raw: response.raw,
       };
+
+      // 승인 결과를 서버 반영 전에 영속화 — 반영 확인(recovery.ts) 후 지워진다
+      journal?.markApproved(result);
+
+      return result;
     },
 
     async cancel(pgCno: string, _reason: string, original?: TerminalCancelOriginal): Promise<TerminalCancelResult> {
@@ -235,6 +283,8 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
       if (ok) lastTx = null;
       return { ok };
     },
+
+    reverseBySerial,
 
     async ping(): Promise<{ connected: boolean; firmware?: string }> {
       try {
