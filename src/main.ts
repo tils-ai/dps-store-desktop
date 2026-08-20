@@ -16,8 +16,10 @@ import { closePrinter, listPorts, sendBytes, warmUpPrinter } from "./printer";
 import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
 import { resolveTenant, type ResolveData } from "./resolve";
 import {
+  createApprovalJournal,
   createTerminalAdapter,
   fetchTerminalServerConfig,
+  startApprovalRecovery,
   type TerminalApproveRequest,
   type TerminalCancelOriginal,
 } from "./terminal";
@@ -116,7 +118,9 @@ ipcMain.handle("tenant:reset", () => {
 // 카드단말(VAN 직결) — 어댑터가 있을 때만 preload 가 window.terminal 을 노출한다.
 // 승인/취소는 예외를 그대로 던져 renderer 쪽에서 실패 UI 로 처리하게 한다.
 // MID/TID 는 서버(웹 관리자)가 진실 소스 — 어댑터가 승인 시점마다 조회한다.
+const approvalJournal = createApprovalJournal();
 const terminalAdapter = createTerminalAdapter({
+  journal: approvalJournal,
   getServerConfig: () => {
     const cfg = loadConfig();
     if (!cfg) return Promise.resolve(null);
@@ -135,7 +139,7 @@ ipcMain.on("terminal:available", (event) => {
   event.returnValue = Boolean(terminalAdapter);
 });
 
-// 카드단말 하트비트 + 원격 취소 폴러 — 어댑터가 있을 때만
+// 카드단말 하트비트 + 원격 취소 폴러 + 승인 복구 루프 — 어댑터가 있을 때만
 if (terminalAdapter) {
   const getTarget = () => {
     const cfg = loadConfig();
@@ -143,6 +147,7 @@ if (terminalAdapter) {
   };
   startTerminalHeartbeat({ adapter: terminalAdapter, getTarget });
   startCancelPoller({ adapter: terminalAdapter, getTarget });
+  startApprovalRecovery({ adapter: terminalAdapter, journal: approvalJournal, getTarget });
 }
 
 function requireTerminal() {
@@ -150,7 +155,31 @@ function requireTerminal() {
   return terminalAdapter;
 }
 
-ipcMain.handle("terminal:approve", (_e, req: TerminalApproveRequest) => requireTerminal().approve(req));
+/**
+ * 승인 가드 — 저널에 미정리 승인이 남아 있으면 새 승인을 막는다 (이중 결제 차단).
+ * 같은 주문의 승인 완료 건은 저장된 결과를 재전달해 renderer 새로고침 후에도 반영만 이어간다.
+ */
+async function guardedApprove(req: TerminalApproveRequest): Promise<unknown> {
+  const pending = approvalJournal.get();
+  if (pending) {
+    if (pending.state === "approved" && pending.orderNo === req.orderNo) {
+      return pending.result; // 재전송(replay) — 서버 반영은 renderer/복구 루프가 이어서 한다
+    }
+    throw new Error(
+      pending.state === "conflict"
+        ? "직전 결제 반영에 문제가 있어 직원 확인이 필요합니다."
+        : "직전 결제 정리가 끝나지 않았습니다. 잠시 후 다시 시도해주세요.",
+    );
+  }
+  approvalJournal.setInFlight(true);
+  try {
+    return await requireTerminal().approve(req);
+  } finally {
+    approvalJournal.setInFlight(false);
+  }
+}
+
+ipcMain.handle("terminal:approve", (_e, req: TerminalApproveRequest) => guardedApprove(req));
 ipcMain.handle("terminal:cancel", (_e, pgCno: string, reason: string, original?: TerminalCancelOriginal) =>
   requireTerminal().cancel(pgCno, reason, original),
 );
@@ -185,12 +214,45 @@ async function showTerminalDiagnostics(): Promise<void> {
       ]
     : ["서버 설정 조회 실패 — 이 단말이 주문 단말로 등록되어 있는지 확인하세요."];
 
-  await dialog.showMessageBox(mainWindow, {
-    type: "info",
+  // 승인 저널 상태 — 미정리 승인이 있으면 표시하고 직원 확인 후 수동 삭제를 허용한다
+  const pending = approvalJournal.get();
+  if (pending) {
+    const stateLabel =
+      pending.state === "approving"
+        ? "결과 불명 (망취소 대기)"
+        : pending.state === "approved"
+          ? "승인 완료 — 서버 반영 대기"
+          : `반영 충돌: ${pending.reason}`;
+    serverLines.push(
+      "",
+      `⚠ 미정리 승인: 주문 ${pending.orderNo} · ${pending.amount.toLocaleString("ko-KR")}원 · ${stateLabel}`,
+      pending.state !== "approving" ? `승인번호 ${pending.result.approvalNo}` : `전문일련번호 ${pending.serial}`,
+      "이 기록이 남아 있는 동안 새 카드 승인은 차단됩니다.",
+    );
+  }
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: pending ? "warning" : "info",
     title: "카드단말 진단",
     message: adapterLine,
     detail: serverLines.join("\n"),
+    buttons: pending ? ["닫기", "미정리 승인 기록 삭제"] : ["닫기"],
+    defaultId: 0,
+    cancelId: 0,
   });
+
+  if (pending && response === 1) {
+    const confirm = await dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      title: "미정리 승인 기록 삭제",
+      message: "관리자 주문 상세·KSNET 포털에서 이 승인 건을 확인했습니까?",
+      detail: "삭제하면 자동 복구(망취소·서버 반영)가 중단되고 새 승인이 다시 허용됩니다.",
+      buttons: ["취소", "확인했고 삭제합니다"],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (confirm.response === 1) approvalJournal.clear();
+  }
 }
 
 ipcMain.handle("printer:get-config", () => getPrinterConfig());
