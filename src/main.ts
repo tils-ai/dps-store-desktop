@@ -21,6 +21,7 @@ import {
   type TerminalApproveRequest,
   type TerminalCancelOriginal,
 } from "./terminal";
+import { startTerminalHeartbeat } from "./terminal/heartbeat";
 import { buildTenantUrl } from "./url";
 import { BASE_URL } from "./env";
 
@@ -132,6 +133,17 @@ const terminalAdapter = createTerminalAdapter({
 ipcMain.on("terminal:available", (event) => {
   event.returnValue = Boolean(terminalAdapter);
 });
+
+// 카드단말 하트비트 — 어댑터가 있을 때만 (관리자 카드단말 탭 상태 표시용)
+if (terminalAdapter) {
+  startTerminalHeartbeat({
+    adapter: terminalAdapter,
+    getTarget: () => {
+      const cfg = loadConfig();
+      return cfg ? { baseUrl: cfg.baseUrl, tenantName: cfg.tenantName } : null;
+    },
+  });
+}
 
 function requireTerminal() {
   if (!terminalAdapter) throw new Error("card terminal adapter not available");
