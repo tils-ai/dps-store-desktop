@@ -12,6 +12,12 @@ export interface TerminalServerConfig {
   /** 단말기 번호 (리더기당 1개) — 비어 있으면 이 단말은 리더기 미연결 */
   tid: string;
   terminalName: string;
+  /** 전자서명 — "none": 무서명(기본), "pad": 승인 프로그램 서명창 */
+  signMode?: "none" | "pad";
+  /** 부가세 — "auto": KSnCAT 자동부가세 위임(기본), "explicit": 전문에 계산해 명시 */
+  taxMode?: "auto" | "explicit";
+  /** 관리자 원격 카드취소 허용 — 켜져 있으면 셸이 취소 요청 큐를 폴링한다 */
+  remoteCancelEnabled?: boolean;
 }
 
 export async function fetchTerminalServerConfig(

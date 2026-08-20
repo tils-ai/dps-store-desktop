@@ -106,20 +106,27 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
   // 망취소(reverseLast)용 직전 거래 보관 — 프로세스 메모리 한정
   let lastTx: LastTransaction | null = null;
 
-  async function requireTid(): Promise<{ tid: string; mid: string }> {
+  async function requireTid(): Promise<TerminalServerConfig> {
     const config = await getServerConfig();
     if (!config?.enabled) throw new Error("단말 직결 결제가 비활성화되어 있습니다");
     if (!config.tid) throw new Error("이 단말에 카드리더기 TID 가 설정되지 않았습니다");
-    return { tid: config.tid, mid: config.mid };
+    return config;
   }
+
+  // 서명·부가세는 관리자 설정(서버)이 진실 소스 — 로컬 config 는 서버 미설정 시 폴백
+  const resolveSignMode = (cfg: TerminalServerConfig): "X" | "K" | "T" | " " =>
+    cfg.signMode ? (cfg.signMode === "pad" ? "K" : "X") : signMode;
+  const resolveTaxMode = (cfg: TerminalServerConfig): "kscat" | "explicit" =>
+    cfg.taxMode ? (cfg.taxMode === "explicit" ? "explicit" : "kscat") : taxMode;
 
   return {
     async approve(req: TerminalApproveRequest): Promise<TerminalApproveResult> {
-      const { tid } = await requireTid();
+      const config = await requireTid();
+      const tid = config.tid;
       const serial = makeSerial();
 
       const taxFreeAmount = req.taxFreeAmount ?? 0;
-      const taxFields = taxMode === "explicit" ? computeTax(req.amount, taxFreeAmount) : {};
+      const taxFields = resolveTaxMode(config) === "explicit" ? computeTax(req.amount, taxFreeAmount) : {};
       const telegram = buildApprovalTelegram({
         telegramType: "0200",
         tid,
@@ -127,7 +134,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         amount: req.amount,
         installment: req.installment ?? 0,
         taxFreeAmount,
-        signMode,
+        signMode: resolveSignMode(config),
         swModelNo: swModelNo(),
         ...taxFields,
       });
