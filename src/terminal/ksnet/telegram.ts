@@ -83,6 +83,17 @@ export interface ApprovalRequestFields {
    * 전문 오류(1001)의 원인은 이 필드가 아니라 거래구분("MI")이었다.
    */
   encryptFlag?: "" | "A";
+  /**
+   * 암호화 정보 필드(순번 15)에 넣을 값 — 기본 공백.
+   *
+   * `"PRT"` 를 넣으면 **KSnCAT 이 자기 프린터로 영수증을 출력한다**
+   * (규격: "CAT단말기(단독결제 Print Port) 설정 시 영수증 출력 - 신용카드 / 현금영수증").
+   * 카드사 규격에 맞춘 전표가 VAN 쪽에서 나오므로 우리가 양식을 맞출 필요가 없다.
+   *
+   * 대신 우리 앱이 직접 그리는 전표(`buildCardSlip`)와 **둘 다 나가면 두 장이 뽑힌다.**
+   * 둘 중 하나만 쓴다.
+   */
+  printOption?: "" | "PRT";
 }
 
 /** 승인/취소/망취소 요청 전문 조립 */
@@ -110,7 +121,7 @@ export function buildApprovalTelegram(f: ApprovalRequestFields): Buffer {
     // 쓰지 않는 값이 들어가 전문 검증에 걸린다
     fixed(f.kioskMode ? (f.swModelNo ?? "") : "", 16), // SW 모델번호
     fixed("", 16), // CAT or Reader 모델번호
-    fixed("", 40), // 암호화 정보
+    fixed(f.printOption ?? "", 40), // 암호화 정보 — "PRT" 면 KSnCAT 이 영수증을 출력한다
     fixed("", 37), // Track II
     Buffer.from([FS]),
     numeric(f.installment ?? 0, 2), // 할부개월

@@ -164,7 +164,15 @@ if (terminalAdapter) {
   startCancelPoller({
     adapter: terminalAdapter,
     getTarget,
-    printCancelSlip: async (data) => sendBytes(buildCardSlip(data)),
+    /*
+       KSnCAT 이 직접 영수증을 뽑는 매장(terminal.printOption="PRT")에서는 우리 전표를
+       내지 않는다 — 둘 다 켜면 취소 한 건에 종이가 두 장 나온다.
+    */
+    printCancelSlip: async (data) => {
+      const cfg = getTerminalConfig();
+      if (cfg.cardSlip === false || cfg.printOption === "PRT") return;
+      return sendBytes(buildCardSlip(data));
+    },
   });
   startApprovalRecovery({ adapter: terminalAdapter, journal: approvalJournal, getTarget });
 }
@@ -320,6 +328,12 @@ ipcMain.handle("printer:list-ports", async () => {
 ipcMain.handle("printer:print-card-slip", async (_e, data: unknown) => {
   try {
     if (!data || typeof data !== "object") return { ok: false, error: "invalid card slip data" };
+    /*
+       KSnCAT 이 직접 영수증을 뽑는 매장에서는 우리 전표를 내지 않는다. 웹이 호출부마다
+       설정을 확인하게 하면 새 화면이 생길 때 빠뜨리므로 여기서 한 번에 막는다.
+    */
+    const cfg = getTerminalConfig();
+    if (cfg.cardSlip === false || cfg.printOption === "PRT") return { ok: true, skipped: true };
     const bytes = buildCardSlip(data as CardSlipData);
     await sendBytes(bytes);
     return { ok: true };

@@ -30,6 +30,13 @@ export interface TerminalConfig {
   txType?: "MI" | "IC" | "MS";
   /** 암호화 여부 — 기본 공백(ACK·EOT 사용). "A" 로 두면 승인 직후 망취소된다 */
   encryptFlag?: "" | "A";
+  /**
+   * "PRT" 면 승인·취소 시 **KSnCAT 이 자기 프린터로 영수증을 출력**한다.
+   * 우리 앱이 그리는 전표와 둘 다 켜면 두 장이 나온다 — `cardSlip` 을 함께 끈다.
+   */
+  printOption?: "" | "PRT";
+  /** 우리 앱이 카드 전표를 직접 그려 출력할지 — 기본 true. PRT 를 쓰면 false 로 둔다 */
+  cardSlip?: boolean;
 }
 
 export interface TenantConfig {

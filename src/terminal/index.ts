@@ -32,6 +32,8 @@ export interface TerminalAdapterDeps {
     txType?: "MI" | "IC" | "MS";
     /** 암호화 여부 — 기본 공백(ACK·EOT 사용) */
     encryptFlag?: "" | "A";
+    /** "PRT" 면 KSnCAT 이 영수증을 출력한다 */
+    printOption?: "" | "PRT";
   };
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND 십진수 문자열) */
   getWindowHandle?: () => string | null;
@@ -83,6 +85,7 @@ export function createTerminalAdapter(deps: TerminalAdapterDeps): TerminalAdapte
     kioskMode: deps.local.kioskMode,
     txType: deps.local.txType,
     encryptFlag: deps.local.encryptFlag,
+    printOption: deps.local.printOption,
     getWindowHandle: deps.getWindowHandle,
     journal: deps.journal,
     nextSerial: deps.nextSerial,

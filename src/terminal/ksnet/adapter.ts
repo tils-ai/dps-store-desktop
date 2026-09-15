@@ -44,6 +44,8 @@ export interface KsnetAdapterOptions {
   txType?: "MI" | "IC" | "MS";
   /** 암호화 여부 — 기본 공백(ACK·EOT 사용). "A" 로 두면 승인 직후 망취소된다 */
   encryptFlag?: "" | "A";
+  /** "PRT" 면 KSnCAT 이 자기 프린터로 영수증을 출력한다 (우리 전표와 택일) */
+  printOption?: "" | "PRT";
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND, 십진수 문자열) — 없으면 공백 전송 */
   getWindowHandle?: () => string | null;
   /** 승인 저널 — 승인 생애를 내구 기록해 크래시·재시작 시 복구를 가능하게 한다 */
@@ -153,6 +155,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
   const kioskMode = options.kioskMode ?? false;
   const txType = options.txType ?? "IC";
   const encryptFlag = options.encryptFlag ?? "";
+  const printOption = options.printOption ?? "";
   const nextSerial = options.nextSerial ?? makeSerial;
 
   // 망취소(reverseLast)용 직전 거래 보관 — 프로세스 메모리 한정
@@ -240,6 +243,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         kioskMode,
         txType,
         encryptFlag,
+        printOption,
       });
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, shortTimeout));
       validateResponse("0440", serial, tid, response);
@@ -274,6 +278,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         kioskMode,
         txType,
         encryptFlag,
+        printOption,
         ...taxFields,
       });
 
@@ -358,6 +363,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         kioskMode,
         txType,
         encryptFlag,
+        printOption,
       });
 
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));
@@ -398,6 +404,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         kioskMode,
         txType,
         encryptFlag,
+        printOption,
       });
 
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));
