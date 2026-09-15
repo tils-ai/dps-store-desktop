@@ -258,12 +258,10 @@ async function showTerminalDiagnostics(): Promise<void> {
     );
   }
 
-  // 전체화면 키오스크는 창틀이 없어 제목의 버전을 못 본다 — 진단에도 함께 적는다
-  serverLines.push("", `앱 버전: v${app.getVersion()}`);
-
   const { response } = await dialog.showMessageBox(mainWindow, {
     type: pending ? "warning" : "info",
-    title: "카드단말 진단",
+    // 전체화면 키오스크는 창틀이 없어 제목의 버전을 못 본다 — 진단 제목에 함께 적는다
+    title: `카드단말 진단 · v${app.getVersion()}`,
     message: adapterLine,
     detail: serverLines.join("\n"),
     buttons: pending ? ["닫기", "미정리 승인 기록 삭제"] : ["닫기"],
