@@ -18,6 +18,14 @@ export interface TerminalConfig {
   signMode?: "X" | "K" | "T" | " ";
   /** 부가세 필드 — "kscat": KSnCAT 자동부가세 위임(기본), "explicit": 과세분 계산해 전송 */
   taxMode?: "kscat" | "explicit";
+  /**
+   * 키오스크 연동 모드(전문의 암호화 여부 "K") — 기본 false.
+   *
+   * 켜면 KSnCAT 이 안내창을 띄우지 않고 윈도우 핸들로 Windows 메시지를 보내는데,
+   * Electron 이 그 메시지를 받지 않아 전문 오류(1001)로 거절된다. KSnCAT 쪽 연동이
+   * 확인된 뒤에만 켠다.
+   */
+  kioskMode?: boolean;
 }
 
 export interface TenantConfig {

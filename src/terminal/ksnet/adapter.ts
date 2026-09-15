@@ -38,6 +38,8 @@ export interface KsnetAdapterOptions {
   signMode?: "X" | "K" | "T" | " ";
   /** 부가세 필드 — "kscat": 0 전송(KSnCAT 자동부가세 위임, 기본), "explicit": 과세분 계산해 전송 */
   taxMode?: "kscat" | "explicit";
+  /** 키오스크 연동 모드(암호화 여부 "K") — 기본 false. 켜면 KSnCAT 이 윈도우 핸들로 메시지를 보낸다 */
+  kioskMode?: boolean;
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND, 십진수 문자열) — 없으면 공백 전송 */
   getWindowHandle?: () => string | null;
   /** 승인 저널 — 승인 생애를 내구 기록해 크래시·재시작 시 복구를 가능하게 한다 */
@@ -144,6 +146,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
   const signMode = options.signMode ?? "X";
   const taxMode = options.taxMode ?? "kscat";
   const swModelNo = () => getWindowHandle?.() ?? "";
+  const kioskMode = options.kioskMode ?? false;
   const nextSerial = options.nextSerial ?? makeSerial;
 
   // 망취소(reverseLast)용 직전 거래 보관 — 프로세스 메모리 한정
@@ -228,6 +231,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         serial,
         amount,
         swModelNo: swModelNo(),
+        kioskMode,
       });
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, shortTimeout));
       validateResponse("0440", serial, tid, response);
@@ -259,6 +263,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         taxFreeAmount,
         signMode: resolveSignMode(config),
         swModelNo: swModelNo(),
+        kioskMode,
         ...taxFields,
       });
 
@@ -281,7 +286,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
       if (response.status !== "O") {
         journal?.clear(); // 명확한 거절 — 승인된 거래가 없다
         const reason = [response.message1, response.message2].filter(Boolean).join(" ");
-        throw new Error(reason || `카드 승인 거절 (${response.responseCode})`);
+        throw new Error(`${reason || "카드 승인 거절"} (${response.responseCode})`);
       }
 
       lastTx = {
@@ -340,13 +345,14 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         originalApprovalNo: orig.approvalNo,
         originalApprovalDate: orig.approvalDate,
         swModelNo: swModelNo(),
+        kioskMode,
       });
 
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));
       validateResponse(isPartial ? "7420" : "0420", cancelSerial, tid, response);
       if (response.status !== "O") {
         const reason = [response.message1, response.message2].filter(Boolean).join(" ");
-        throw new Error(reason || `취소 거절 (${response.responseCode})`);
+        throw new Error(`${reason || "취소 거절"} (${response.responseCode})`);
       }
 
       // 부분취소는 원거래가 잔액으로 살아 있으므로 직전 거래 보관을 유지한다
@@ -377,6 +383,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         originalApprovalNo: lastTx.approvalNo,
         originalApprovalDate: lastTx.approvalDate,
         swModelNo: swModelNo(),
+        kioskMode,
       });
 
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));

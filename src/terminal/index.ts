@@ -21,7 +21,14 @@ export { fetchTerminalServerConfig, type TerminalServerConfig } from "./server-c
 export interface TerminalAdapterDeps {
   getServerConfig: () => Promise<TerminalServerConfig | null>;
   /** 로컬 승인 데몬(KSnCAT) 접속 정보 — port 0 이면 미설정 */
-  local: { host: string; port: number; signMode?: "X" | "K" | "T" | " "; taxMode?: "kscat" | "explicit" };
+  local: {
+    host: string;
+    port: number;
+    signMode?: "X" | "K" | "T" | " ";
+    taxMode?: "kscat" | "explicit";
+    /** 키오스크 연동 모드 — 기본 false (KSnCAT 이 자체 안내창으로 카드를 받는다) */
+    kioskMode?: boolean;
+  };
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND 십진수 문자열) */
   getWindowHandle?: () => string | null;
   /** 승인 저널 — 승인 생애 영속화 (크래시·재시작 복구용) */
@@ -69,6 +76,7 @@ export function createTerminalAdapter(deps: TerminalAdapterDeps): TerminalAdapte
     getServerConfig: deps.getServerConfig,
     signMode: deps.local.signMode,
     taxMode: deps.local.taxMode,
+    kioskMode: deps.local.kioskMode,
     getWindowHandle: deps.getWindowHandle,
     journal: deps.journal,
     nextSerial: deps.nextSerial,

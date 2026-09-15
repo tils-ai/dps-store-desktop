@@ -55,6 +55,16 @@ export interface ApprovalRequestFields {
    * 무인 키오스크는 보통 "X"(무서명) 또는 KSnCAT 설정 위임을 쓴다.
    */
   signMode?: " " | "X" | "K" | "T";
+  /**
+   * 키오스크 연동 모드(암호화 여부 "K") 사용 여부.
+   *
+   * 이 모드는 KSnCAT 이 자체 안내창을 띄우지 않고 **SW 모델번호에 넣은 윈도우 핸들로
+   * Windows 메시지를 보내** 호출자가 화면을 그리게 하는 방식이다. Electron 은 그 메시지를
+   * 받지 않으므로 켜 두면 KSnCAT 이 전문 오류(1001)로 거절한다 (2026-09-15 현장 확인).
+   *
+   * 기본값은 끔 — 공백을 보내면 KSnCAT 이 자체 안내창으로 카드를 받는다.
+   */
+  kioskMode?: boolean;
 }
 
 /** 승인/취소/망취소 요청 전문 조립 */
@@ -71,8 +81,10 @@ export function buildApprovalTelegram(f: ApprovalRequestFields): Buffer {
     fixed("", 1), // Pos Entry Mode
     fixed("", 20), // 거래고유번호
     fixed("", 20), // 카드번호 (KSnCAT 리더기 입력)
-    fixed("K", 1), // 암호화 여부: 키오스크 연동 모드
-    fixed(f.swModelNo ?? "", 16), // SW 모델번호 (키오스크 모드 윈도우 핸들)
+    fixed(f.kioskMode ? "K" : "", 1), // 암호화 여부: 키오스크 연동 모드
+    // 윈도우 핸들은 키오스크 연동 모드에서만 의미가 있다. 끈 상태로 보내면 KSnCAT 이
+    // 쓰지 않는 값이 들어가 전문 검증에 걸린다
+    fixed(f.kioskMode ? (f.swModelNo ?? "") : "", 16), // SW 모델번호
     fixed("", 16), // CAT or Reader 모델번호
     fixed("", 40), // 암호화 정보
     fixed("", 37), // Track II
