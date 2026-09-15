@@ -66,7 +66,11 @@ export interface ApprovalRequestFields {
    */
   kioskMode?: boolean;
   /**
-   * 거래구분 — 기본 "MI"(신용 MS/IC 겸용). 리더기·KSnCAT 조합에 따라 "IC" 만 받는 환경이 있다.
+   * 거래구분 — 기본 "IC"(신용 IC).
+   *
+   * 규격상 "MI"(MS/IC 겸용)도 유효하지만 이 KSnCAT 조합에서는 전문 오류(1001)로 거절됐다.
+   * 같은 단말의 단독결제가 "IC" 로 정상 승인된 것을 확인해 기본값을 맞췄다.
+   * MS(마그네틱) 카드까지 받아야 하면 config 로 "MI" 를 지정한다.
    */
   txType?: "MI" | "IC" | "MS";
 }
@@ -75,7 +79,7 @@ export interface ApprovalRequestFields {
 export function buildApprovalTelegram(f: ApprovalRequestFields): Buffer {
   const body = Buffer.concat([
     Buffer.from([STX]),
-    fixed(f.txType ?? "MI", 2), // 거래구분: 기본 신용 MS/IC 겸용
+    fixed(f.txType ?? "IC", 2), // 거래구분: 기본 신용 IC
     fixed("01", 2), // 업무구분: 승인/취소
     fixed(f.telegramType, 4), // 전문구분
     fixed("N", 1), // 거래형태: 일반

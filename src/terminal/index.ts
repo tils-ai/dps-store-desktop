@@ -28,7 +28,7 @@ export interface TerminalAdapterDeps {
     taxMode?: "kscat" | "explicit";
     /** 키오스크 연동 모드 — 기본 false (KSnCAT 이 자체 안내창으로 카드를 받는다) */
     kioskMode?: boolean;
-    /** 거래구분 — 기본 "MI" */
+    /** 거래구분 — 기본 "IC" */
     txType?: "MI" | "IC" | "MS";
   };
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND 십진수 문자열) */
