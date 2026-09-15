@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { PrinterConfig } from "./config";
-import type { ReceiptData } from "./receipt";
+import type { ReceiptData, CardSlipData } from "./receipt";
 import type { ResolveData, ResolveResult } from "./resolve";
 import type {
   TerminalAdapter,
@@ -45,6 +45,9 @@ const api = {
   listPrinterPorts: (): Promise<PrinterListAck> => ipcRenderer.invoke("printer:list-ports"),
   printReceipt: (data: ReceiptData): Promise<PrinterAck> =>
     ipcRenderer.invoke("printer:print-receipt", data),
+  /** 카드 매출·취소 전표 — 접수증과 다른 문서다 (거래 증빙) */
+  printCardSlip: (data: CardSlipData): Promise<PrinterAck> =>
+    ipcRenderer.invoke("printer:print-card-slip", data),
 };
 
 contextBridge.exposeInMainWorld("electronAPI", api);

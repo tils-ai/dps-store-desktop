@@ -13,7 +13,7 @@ import {
 } from "./config";
 import { installKiosk, type KioskController } from "./kiosk";
 import { closePrinter, listPorts, sendBytes, warmUpPrinter } from "./printer";
-import { buildReceipt, sampleReceipt, type ReceiptData } from "./receipt";
+import { buildReceipt, sampleReceipt, type ReceiptData, buildCardSlip, type CardSlipData } from "./receipt";
 import { resolveTenant, type ResolveData } from "./resolve";
 import {
   createApprovalJournal,
@@ -161,7 +161,11 @@ if (terminalAdapter) {
     return cfg ? { baseUrl: cfg.baseUrl, tenantName: cfg.tenantName } : null;
   };
   startTerminalHeartbeat({ adapter: terminalAdapter, getTarget });
-  startCancelPoller({ adapter: terminalAdapter, getTarget });
+  startCancelPoller({
+    adapter: terminalAdapter,
+    getTarget,
+    printCancelSlip: async (data) => sendBytes(buildCardSlip(data)),
+  });
   startApprovalRecovery({ adapter: terminalAdapter, journal: approvalJournal, getTarget });
 }
 
@@ -301,6 +305,24 @@ ipcMain.handle("printer:set-config", (_e, patch: unknown) => {
 ipcMain.handle("printer:list-ports", async () => {
   try {
     return { ok: true, ports: await listPorts() };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * 카드 전표 출력 — 매출(승인) / 취소.
+ *
+ * 접수증과 같은 프린터를 쓰지만 문서가 다르다. 접수증은 주문 안내, 전표는 거래 증빙이다.
+ * 출력 실패를 던지지 않고 결과로 돌려주는 것도 같다 — 승인은 이미 끝났으므로 종이가
+ * 안 나온다고 결제를 되돌릴 수는 없다.
+ */
+ipcMain.handle("printer:print-card-slip", async (_e, data: unknown) => {
+  try {
+    if (!data || typeof data !== "object") return { ok: false, error: "invalid card slip data" };
+    const bytes = buildCardSlip(data as CardSlipData);
+    await sendBytes(bytes);
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
