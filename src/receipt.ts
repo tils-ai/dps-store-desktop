@@ -243,6 +243,135 @@ export function buildReceipt(d: ReceiptData): Buffer {
   return Buffer.concat(parts);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 카드 전표 (매출/취소)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 전표에 인쇄할 가맹점 정보 — 비어 있는 줄은 그리지 않는다 */
+export interface CardSlipMerchant {
+  businessName?: string | null;
+  businessCeo?: string | null;
+  businessRegNo?: string | null;
+  businessAddress?: string | null;
+  businessPhone?: string | null;
+}
+
+export interface CardSlipData {
+  /** 매출(승인) / 취소 */
+  kind: "approve" | "cancel";
+  brandName: string;
+  orderNumber: string;
+  /** 승인·취소 금액 (합계) */
+  amount: number;
+  /** 승인번호 — 취소 전표에서는 원거래 승인번호다 */
+  approvalNo: string;
+  /** 승인 시각 (ISO) */
+  approvedAt?: string;
+  /** 취소 시각 (ISO) — kind 가 cancel 일 때만 */
+  cancelledAt?: string;
+  /** 마스킹된 카드번호 */
+  cardNo?: string;
+  /** 발급사명 */
+  issuerName?: string;
+  /** 승인에 쓰인 가맹점번호 */
+  mid?: string;
+  /** 단말기번호 */
+  tid?: string;
+  /** VAN 거래번호 */
+  vanTr?: string;
+  /** 할부개월 — 0 이면 일시불 */
+  installment?: number;
+  merchant?: CardSlipMerchant;
+  /** 사본 라벨 — "고객용" / "매장 보관용" */
+  copyLabel?: string;
+}
+
+/**
+ * 부가세 역산 — **면세·복합과세를 고려하지 않는다.**
+ *
+ * 전 상품이 과세라는 전제로 합계에서 10/110 을 부가세로 본다. 면세 상품을 파는 매장이
+ * 생기면 주문의 품목별 과세 구분을 받아 계산해야 한다.
+ */
+function splitVat(total: number): { supply: number; vat: number } {
+  const vat = Math.round(total / 11);
+  return { supply: total - vat, vat };
+}
+
+/**
+ * 카드 매출·취소 전표.
+ *
+ * 접수증과 **한눈에 구분되어야 한다** — 매장에 두 종이가 섞여 쌓이면 취소된 건을 접수 건으로
+ * 착각한다. 그래서 제목을 크게 박고 금액을 겹선으로 감싼다. QR 은 넣지 않는다(거래 증빙이지
+ * 주문 안내가 아니다).
+ *
+ * 원거래를 특정하는 값(승인번호·승인일시·카드번호)이 중심이다. 카드사 매출과 대조하거나
+ * 분쟁이 생겼을 때 이 종이 한 장으로 거래를 찾아낸다.
+ */
+export function buildCardSlip(d: CardSlipData): Buffer {
+  const parts: Buffer[] = [];
+  const isCancel = d.kind === "cancel";
+  const { supply, vat } = splitVat(d.amount);
+
+  parts.push(cmd.init());
+  parts.push(cmd.koreanOn());
+
+  // 제목
+  parts.push(cmd.align(1));
+  parts.push(line(d.merchant?.businessName || d.brandName));
+  parts.push(cmd.size(1, 1));
+  parts.push(cmd.bold(true));
+  parts.push(line(isCancel ? "카드 취소" : "신용카드 매출전표"));
+  parts.push(cmd.bold(false));
+  parts.push(cmd.size(0, 0));
+  if (d.copyLabel) parts.push(line(`[${d.copyLabel}]`));
+  parts.push(cmd.feed(1));
+
+  // 금액 — 취소 전표는 이 숫자가 먼저 보여야 한다
+  parts.push(cmd.align(0));
+  parts.push(divider("="));
+  parts.push(leftRight("공급가액", formatPrice(supply)));
+  parts.push(leftRight("부가세", formatPrice(vat)));
+  parts.push(cmd.size(1, 1));
+  parts.push(cmd.bold(true));
+  parts.push(leftRight(isCancel ? "취소 합계" : "합계", formatPrice(d.amount), LINE_WIDTH / 2));
+  parts.push(cmd.bold(false));
+  parts.push(cmd.size(0, 0));
+  parts.push(divider("="));
+
+  // 카드 · 승인
+  if (d.cardNo || d.issuerName) {
+    parts.push(line(`${d.issuerName ?? "카드"} ${d.cardNo ?? ""}`.trim()));
+  }
+  parts.push(line(`할부 ${d.installment ? `${d.installment}개월` : "일시불"}`));
+  parts.push(cmd.bold(true));
+  parts.push(line(`승인번호 ${d.approvalNo}`));
+  parts.push(cmd.bold(false));
+  if (d.approvedAt) parts.push(line(`승인 ${formatDateTime(d.approvedAt)}`));
+  if (isCancel) parts.push(line(`취소 ${formatDateTime(d.cancelledAt ?? new Date().toISOString())}`));
+  if (d.vanTr) parts.push(line(`거래번호 ${d.vanTr}`));
+
+  // 가맹점 — 비어 있는 줄은 그리지 않는다
+  parts.push(divider());
+  parts.push(line(`주문 ${d.orderNumber}`));
+  const m = d.merchant;
+  if (m?.businessName) parts.push(line(`상호 ${m.businessName}`));
+  if (m?.businessCeo) parts.push(line(`대표 ${m.businessCeo}`));
+  if (m?.businessRegNo) parts.push(line(`사업자 ${m.businessRegNo}`));
+  if (m?.businessAddress) parts.push(line(m.businessAddress));
+  if (m?.businessPhone) parts.push(line(`전화 ${m.businessPhone}`));
+  if (d.mid || d.tid) parts.push(line(`가맹점 ${d.mid ?? "-"} / 단말 ${d.tid ?? "-"}`));
+
+  parts.push(divider());
+  parts.push(cmd.align(2));
+  parts.push(line(`${formatDateTime(new Date().toISOString())} 출력`));
+  parts.push(cmd.align(0));
+
+  parts.push(cmd.feed(3));
+  parts.push(cmd.cut());
+
+  return Buffer.concat(parts);
+}
+
 /** 진단/단축키용 샘플 영수증 */
 export function sampleReceipt(brandName: string): ReceiptData {
   return {
