@@ -28,7 +28,7 @@ export interface TerminalConfig {
   kioskMode?: boolean;
   /** 거래구분 — 기본 "IC"(신용 IC). MS 카드까지 받아야 하면 "MI" */
   txType?: "MI" | "IC" | "MS";
-  /** 암호화 여부 — 기본 "A"(ACK·EOT 미전송). ""(공백)으로 되돌려 시험할 수 있다 */
+  /** 암호화 여부 — 기본 공백(ACK·EOT 사용). "A" 로 두면 승인 직후 망취소된다 */
   encryptFlag?: "" | "A";
 }
 

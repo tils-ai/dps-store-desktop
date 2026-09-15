@@ -30,7 +30,7 @@ export interface TerminalAdapterDeps {
     kioskMode?: boolean;
     /** 거래구분 — 기본 "IC" */
     txType?: "MI" | "IC" | "MS";
-    /** 암호화 여부 — 기본 "A". ""(공백)으로 시험 가능 */
+    /** 암호화 여부 — 기본 공백(ACK·EOT 사용) */
     encryptFlag?: "" | "A";
   };
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND 십진수 문자열) */
