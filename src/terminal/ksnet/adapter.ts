@@ -40,6 +40,8 @@ export interface KsnetAdapterOptions {
   taxMode?: "kscat" | "explicit";
   /** 키오스크 연동 모드(암호화 여부 "K") — 기본 false. 켜면 KSnCAT 이 윈도우 핸들로 메시지를 보낸다 */
   kioskMode?: boolean;
+  /** 거래구분 — 기본 "MI". 이 조합에서 거절되면 "IC" 로 바꿔 시험한다 */
+  txType?: "MI" | "IC" | "MS";
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND, 십진수 문자열) — 없으면 공백 전송 */
   getWindowHandle?: () => string | null;
   /** 승인 저널 — 승인 생애를 내구 기록해 크래시·재시작 시 복구를 가능하게 한다 */
@@ -147,6 +149,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
   const taxMode = options.taxMode ?? "kscat";
   const swModelNo = () => getWindowHandle?.() ?? "";
   const kioskMode = options.kioskMode ?? false;
+  const txType = options.txType ?? "MI";
   const nextSerial = options.nextSerial ?? makeSerial;
 
   // 망취소(reverseLast)용 직전 거래 보관 — 프로세스 메모리 한정
@@ -232,6 +235,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         amount,
         swModelNo: swModelNo(),
         kioskMode,
+        txType,
       });
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, shortTimeout));
       validateResponse("0440", serial, tid, response);
@@ -264,6 +268,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         signMode: resolveSignMode(config),
         swModelNo: swModelNo(),
         kioskMode,
+        txType,
         ...taxFields,
       });
 
@@ -346,6 +351,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         originalApprovalDate: orig.approvalDate,
         swModelNo: swModelNo(),
         kioskMode,
+        txType,
       });
 
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));
@@ -384,6 +390,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         originalApprovalDate: lastTx.approvalDate,
         swModelNo: swModelNo(),
         kioskMode,
+        txType,
       });
 
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));

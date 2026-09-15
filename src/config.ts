@@ -26,6 +26,8 @@ export interface TerminalConfig {
    * 확인된 뒤에만 켠다.
    */
   kioskMode?: boolean;
+  /** 거래구분 — 기본 "MI"(신용 MS/IC). 거절되면 "IC" 로 바꿔 시험한다 */
+  txType?: "MI" | "IC" | "MS";
 }
 
 export interface TenantConfig {

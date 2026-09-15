@@ -65,13 +65,17 @@ export interface ApprovalRequestFields {
    * 기본값은 끔 — 공백을 보내면 KSnCAT 이 자체 안내창으로 카드를 받는다.
    */
   kioskMode?: boolean;
+  /**
+   * 거래구분 — 기본 "MI"(신용 MS/IC 겸용). 리더기·KSnCAT 조합에 따라 "IC" 만 받는 환경이 있다.
+   */
+  txType?: "MI" | "IC" | "MS";
 }
 
 /** 승인/취소/망취소 요청 전문 조립 */
 export function buildApprovalTelegram(f: ApprovalRequestFields): Buffer {
   const body = Buffer.concat([
     Buffer.from([STX]),
-    fixed("MI", 2), // 거래구분: 신용 MS/IC
+    fixed(f.txType ?? "MI", 2), // 거래구분: 기본 신용 MS/IC 겸용
     fixed("01", 2), // 업무구분: 승인/취소
     fixed(f.telegramType, 4), // 전문구분
     fixed("N", 1), // 거래형태: 일반
@@ -81,7 +85,13 @@ export function buildApprovalTelegram(f: ApprovalRequestFields): Buffer {
     fixed("", 1), // Pos Entry Mode
     fixed("", 20), // 거래고유번호
     fixed("", 20), // 카드번호 (KSnCAT 리더기 입력)
-    fixed(f.kioskMode ? "K" : "", 1), // 암호화 여부: 키오스크 연동 모드
+    /*
+       암호화 여부 — **기본(공백)은 ACK & EOT 핸드셰이크를 전제한다.** 우리 소켓 교환은
+       전문만 주고받고 ACK(0x06)를 쓰지 않으므로 "A"(ACK & EOT 전송 안함)를 보낸다.
+       공백으로 두면 KSnCAT 이 전문 오류(1001)로 거절한다 (2026-09-15 현장 확인).
+       "K"(키오스크 연동 모드)는 윈도우 핸들로 메시지를 받는 방식이라 Electron 에서 못 쓴다.
+    */
+    fixed(f.kioskMode ? "K" : "A", 1), // 암호화 여부
     // 윈도우 핸들은 키오스크 연동 모드에서만 의미가 있다. 끈 상태로 보내면 KSnCAT 이
     // 쓰지 않는 값이 들어가 전문 검증에 걸린다
     fixed(f.kioskMode ? (f.swModelNo ?? "") : "", 16), // SW 모델번호
