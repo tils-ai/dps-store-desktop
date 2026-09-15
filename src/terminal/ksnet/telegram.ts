@@ -73,6 +73,15 @@ export interface ApprovalRequestFields {
    * MS(마그네틱) 카드까지 받아야 하면 config 로 "MI" 를 지정한다.
    */
   txType?: "MI" | "IC" | "MS";
+  /**
+   * 암호화 여부 필드 값 — 기본 "A"(ACK & EOT 전송 안함).
+   *
+   * 공백은 ACK & EOT 핸드셰이크를 전제하는데 우리 소켓 교환은 그것을 쓰지 않는다.
+   * 다만 전문 오류(1001)의 실제 원인은 거래구분("MI")이었고, 이 값을 "A" 로 바꾼 것과
+   * 거래구분을 "IC" 로 바꾼 것이 연달아 있어 **"A" 가 꼭 필요한지는 확인되지 않았다.**
+   * 공백으로 되돌려 시험할 수 있게 열어 둔다.
+   */
+  encryptFlag?: "" | "A";
 }
 
 /** 승인/취소/망취소 요청 전문 조립 */
@@ -95,7 +104,7 @@ export function buildApprovalTelegram(f: ApprovalRequestFields): Buffer {
        공백으로 두면 KSnCAT 이 전문 오류(1001)로 거절한다 (2026-09-15 현장 확인).
        "K"(키오스크 연동 모드)는 윈도우 핸들로 메시지를 받는 방식이라 Electron 에서 못 쓴다.
     */
-    fixed(f.kioskMode ? "K" : "A", 1), // 암호화 여부
+    fixed(f.kioskMode ? "K" : (f.encryptFlag ?? "A"), 1), // 암호화 여부
     // 윈도우 핸들은 키오스크 연동 모드에서만 의미가 있다. 끈 상태로 보내면 KSnCAT 이
     // 쓰지 않는 값이 들어가 전문 검증에 걸린다
     fixed(f.kioskMode ? (f.swModelNo ?? "") : "", 16), // SW 모델번호

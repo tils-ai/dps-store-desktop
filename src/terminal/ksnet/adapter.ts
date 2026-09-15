@@ -42,6 +42,8 @@ export interface KsnetAdapterOptions {
   kioskMode?: boolean;
   /** 거래구분 — 기본 "IC". MS 카드까지 받아야 하면 "MI" */
   txType?: "MI" | "IC" | "MS";
+  /** 암호화 여부 — 기본 "A"(ACK·EOT 미전송). ""(공백)으로 되돌려 시험할 수 있다 */
+  encryptFlag?: "" | "A";
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND, 십진수 문자열) — 없으면 공백 전송 */
   getWindowHandle?: () => string | null;
   /** 승인 저널 — 승인 생애를 내구 기록해 크래시·재시작 시 복구를 가능하게 한다 */
@@ -150,6 +152,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
   const swModelNo = () => getWindowHandle?.() ?? "";
   const kioskMode = options.kioskMode ?? false;
   const txType = options.txType ?? "IC";
+  const encryptFlag = options.encryptFlag ?? "A";
   const nextSerial = options.nextSerial ?? makeSerial;
 
   // 망취소(reverseLast)용 직전 거래 보관 — 프로세스 메모리 한정
@@ -236,6 +239,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         swModelNo: swModelNo(),
         kioskMode,
         txType,
+        encryptFlag,
       });
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, shortTimeout));
       validateResponse("0440", serial, tid, response);
@@ -269,6 +273,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         swModelNo: swModelNo(),
         kioskMode,
         txType,
+        encryptFlag,
         ...taxFields,
       });
 
@@ -352,6 +357,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         swModelNo: swModelNo(),
         kioskMode,
         txType,
+        encryptFlag,
       });
 
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));
@@ -391,6 +397,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         swModelNo: swModelNo(),
         kioskMode,
         txType,
+        encryptFlag,
       });
 
       const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));

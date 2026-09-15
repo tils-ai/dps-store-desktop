@@ -28,6 +28,8 @@ export interface TerminalConfig {
   kioskMode?: boolean;
   /** 거래구분 — 기본 "IC"(신용 IC). MS 카드까지 받아야 하면 "MI" */
   txType?: "MI" | "IC" | "MS";
+  /** 암호화 여부 — 기본 "A"(ACK·EOT 미전송). ""(공백)으로 되돌려 시험할 수 있다 */
+  encryptFlag?: "" | "A";
 }
 
 export interface TenantConfig {

@@ -30,6 +30,8 @@ export interface TerminalAdapterDeps {
     kioskMode?: boolean;
     /** 거래구분 — 기본 "IC" */
     txType?: "MI" | "IC" | "MS";
+    /** 암호화 여부 — 기본 "A". ""(공백)으로 시험 가능 */
+    encryptFlag?: "" | "A";
   };
   /** 키오스크 연동 모드 결제창 부모 윈도우 핸들 (Windows HWND 십진수 문자열) */
   getWindowHandle?: () => string | null;
@@ -80,6 +82,7 @@ export function createTerminalAdapter(deps: TerminalAdapterDeps): TerminalAdapte
     taxMode: deps.local.taxMode,
     kioskMode: deps.local.kioskMode,
     txType: deps.local.txType,
+    encryptFlag: deps.local.encryptFlag,
     getWindowHandle: deps.getWindowHandle,
     journal: deps.journal,
     nextSerial: deps.nextSerial,
