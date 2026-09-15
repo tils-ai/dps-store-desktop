@@ -18,6 +18,14 @@ export interface TerminalServerConfig {
   taxMode?: "auto" | "explicit";
   /** 관리자 원격 카드취소 허용 — 켜져 있으면 셸이 취소 요청 큐를 폴링한다 */
   remoteCancelEnabled?: boolean;
+  /**
+   * 이 단말의 승인 프로그램(KSnCAT) 인터페이스 포트 — 관리자 화면에서 입력한 값.
+   *
+   * 승인 프로그램이 PC 마다 설치되므로 TID 와 같은 단말 단위 값이다. 0 이면 미설정이라
+   * 로컬 `config.json` 의 `terminal.port` 를 쓴다. 현장에서 파일을 직접 고치지 않고
+   * 관리자에서 바꿀 수 있게 하려는 값이다.
+   */
+  interfacePort?: number;
 }
 
 /**

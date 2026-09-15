@@ -23,6 +23,10 @@ import {
 
 export interface KsnetAdapterOptions {
   host: string;
+  /**
+   * 로컬 `config.json` 의 포트. 0 이면 서버(관리자) 설정의 `interfacePort` 만 쓴다.
+   * 둘 다 없으면 통신 시점에 명확한 오류를 낸다.
+   */
   port: number;
   /** 카드 삽입 대기 포함 승인 응답 타임아웃 (ms) */
   approveTimeoutMs?: number;
@@ -121,6 +125,20 @@ function computeTax(amount: number, taxFreeAmount: number): { tax: number; suppl
 
 export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapter & KsnetAdapterExtras {
   const { host, port, getServerConfig, getWindowHandle, journal } = options;
+
+  /*
+     포트는 통신 직전에 정한다 — 관리자 화면에서 바꾼 값을 앱 재시작 없이 반영하기 위해서다.
+     서버 값이 우선이고, 없으면 로컬 config.json 을 쓴다. 현장에서 파일을 직접 고치지 않고
+     관리자에서 포트를 옮길 수 있게 하려는 것이다.
+  */
+  const resolvePort = async (): Promise<number> => {
+    const serverPort = await getServerConfig()
+      .then((cfg) => cfg?.interfacePort ?? 0)
+      .catch(() => 0);
+    const resolved = serverPort > 0 ? serverPort : port;
+    if (resolved > 0) return resolved;
+    throw new Error("승인 프로그램 포트가 설정되지 않았습니다 (관리자 > 장비 설정 > 카드단말).");
+  };
   const approveTimeout = options.approveTimeoutMs ?? APPROVE_TIMEOUT_MS;
   const shortTimeout = options.shortTimeoutMs ?? SHORT_TIMEOUT_MS;
   const signMode = options.signMode ?? "X";
@@ -211,7 +229,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         amount,
         swModelNo: swModelNo(),
       });
-      const response = parseApprovalResponse(await exchange(host, port, telegram, shortTimeout));
+      const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, shortTimeout));
       validateResponse("0440", serial, tid, response);
       return { ok: response.status === "O" };
     } catch {
@@ -249,7 +267,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
 
       let response;
       try {
-        response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));
+        response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));
         validateResponse("0200", serial, tid, response);
       } catch (err) {
         // 결과 불명(타임아웃·소켓 오류) — 즉시 망취소를 시도해 승인됐을 가능성을 제거한다.
@@ -324,7 +342,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         swModelNo: swModelNo(),
       });
 
-      const response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));
+      const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));
       validateResponse(isPartial ? "7420" : "0420", cancelSerial, tid, response);
       if (response.status !== "O") {
         const reason = [response.message1, response.message2].filter(Boolean).join(" ");
@@ -361,7 +379,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
         swModelNo: swModelNo(),
       });
 
-      const response = parseApprovalResponse(await exchange(host, port, telegram, approveTimeout));
+      const response = parseApprovalResponse(await exchange(host, await resolvePort(), telegram, approveTimeout));
       validateResponse("0460", lastTx.serial, tid, response);
       const ok = response.status === "O";
       if (ok) lastTx = null;
@@ -377,7 +395,7 @@ export function createKsnetAdapter(options: KsnetAdapterOptions): TerminalAdapte
       return withLock(async () => {
         try {
           const response = parseReaderStatusResponse(
-            await exchange(host, port, buildReaderStatusTelegram(), shortTimeout),
+            await exchange(host, await resolvePort(), buildReaderStatusTelegram(), shortTimeout),
           );
           return { connected: response.errorCode === "0000", firmware: `card:${response.cardStatus || "-"}` };
         } catch {
