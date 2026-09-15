@@ -49,19 +49,28 @@ export function createTerminalAdapter(deps: TerminalAdapterDeps): TerminalAdapte
 
   const envPort = Number(process.env.DPS_TERMINAL_PORT ?? 0);
   const port = envPort > 0 ? envPort : deps.local.port;
-  if (port > 0) {
-    console.log(`[terminal] KSNET adapter enabled — KSnCAT ${deps.local.host}:${port}`);
-    return createKsnetAdapter({
-      host: deps.local.host,
-      port,
-      getServerConfig: deps.getServerConfig,
-      signMode: deps.local.signMode,
-      taxMode: deps.local.taxMode,
-      getWindowHandle: deps.getWindowHandle,
-      journal: deps.journal,
-      nextSerial: deps.nextSerial,
-    });
-  }
 
-  return null;
+  /*
+     로컬 포트가 없어도 어댑터를 만든다 — 포트를 관리자 화면에서 받을 수 있기 때문이다
+     (`interfacePort`). 어댑터는 통신 직전에 서버 값을 우선해 포트를 정하고, 양쪽 다 없으면
+     그때 오류를 낸다.
+
+     이 단말에서 카드결제를 실제로 쓸지는 웹이 따로 판별하므로(`useTerminalPayment` 가
+     서버 설정의 enabled·tid 를 본다), 어댑터가 있다고 결제가 켜지는 것은 아니다.
+  */
+  console.log(
+    port > 0
+      ? `[terminal] KSNET adapter enabled — KSnCAT ${deps.local.host}:${port} (로컬 설정)`
+      : `[terminal] KSNET adapter enabled — 포트는 관리자 설정에서 받는다`,
+  );
+  return createKsnetAdapter({
+    host: deps.local.host,
+    port,
+    getServerConfig: deps.getServerConfig,
+    signMode: deps.local.signMode,
+    taxMode: deps.local.taxMode,
+    getWindowHandle: deps.getWindowHandle,
+    journal: deps.journal,
+    nextSerial: deps.nextSerial,
+  });
 }
