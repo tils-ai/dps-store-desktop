@@ -53,10 +53,14 @@ function disableJarvisCache(): void {
   });
 }
 
+/** 창 제목 — 어느 버전이 도는지 창틀에서 바로 보인다 (업데이트 적용 확인용) */
+const windowTitle = () => `DPS Store Desktop v${app.getVersion()}`;
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    title: windowTitle(),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -69,6 +73,15 @@ function createWindow(): void {
   kiosk = installKiosk({
     mainWindow,
     getTenantConfig: () => loadConfig(),
+  });
+
+  /*
+     로드한 웹페이지의 <title> 이 창 제목을 덮어쓰지 않게 막는다. 창틀의 버전 표기는
+     업데이트가 실제로 적용됐는지 확인하는 가장 빠른 수단이라 항상 보여야 한다.
+  */
+  mainWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
+    mainWindow?.setTitle(windowTitle());
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -244,6 +257,9 @@ async function showTerminalDiagnostics(): Promise<void> {
       "이 기록이 남아 있는 동안 새 카드 승인은 차단됩니다.",
     );
   }
+
+  // 전체화면 키오스크는 창틀이 없어 제목의 버전을 못 본다 — 진단에도 함께 적는다
+  serverLines.push("", `앱 버전: v${app.getVersion()}`);
 
   const { response } = await dialog.showMessageBox(mainWindow, {
     type: pending ? "warning" : "info",
