@@ -208,13 +208,25 @@ async function showTerminalDiagnostics(): Promise<void> {
 
   const cfg = loadConfig();
   const serverCfg = cfg ? await fetchTerminalServerConfig(cfg.baseUrl, cfg.tenantName).catch(() => null) : null;
+  // 포트가 어디서 왔는지 보여준다 — 관리자 입력과 로컬 config 중 무엇이 쓰이는지가
+  // 현장에서 가장 자주 헷갈린다 (리더기가 물린 COM 포트로 오해하는 일도 잦다)
+  const localPort = getTerminalConfig().port;
+  const serverPort = serverCfg?.interfacePort ?? 0;
+  const portLine =
+    serverPort > 0
+      ? `승인 프로그램 포트: ${serverPort} (관리자 설정)`
+      : localPort > 0
+        ? `승인 프로그램 포트: ${localPort} (단말 config.json)`
+        : "승인 프로그램 포트: 미설정 — 관리자 > 장비 설정 > 카드단말에서 입력하세요";
+
   const serverLines = serverCfg
     ? [
         `사용: ${serverCfg.enabled ? "ON" : "OFF"} · 사업자: ${serverCfg.provider}`,
         `MID: ${serverCfg.mid || "(미입력)"} · TID: ${serverCfg.tid || "(미입력)"}`,
         `단말 이름: ${serverCfg.terminalName || "-"}`,
+        portLine,
       ]
-    : ["서버 설정 조회 실패 — 이 단말이 주문 단말로 등록되어 있는지 확인하세요."];
+    : ["서버 설정 조회 실패 — 이 단말이 주문 단말로 등록되어 있는지 확인하세요.", portLine];
 
   // 승인 저널 상태 — 미정리 승인이 있으면 표시하고 직원 확인 후 수동 삭제를 허용한다
   const pending = approvalJournal.get();
