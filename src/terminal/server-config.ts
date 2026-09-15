@@ -7,8 +7,6 @@ export interface TerminalServerConfig {
   enabled: boolean;
   provider: string;
   platform: string;
-  /** 가맹점 번호 (매장당 1개) */
-  mid: string;
   /** 단말기 번호 (리더기당 1개) — 비어 있으면 이 단말은 리더기 미연결 */
   tid: string;
   terminalName: string;

@@ -235,7 +235,7 @@ async function showTerminalDiagnostics(): Promise<void> {
   const serverLines = serverCfg
     ? [
         `사용: ${serverCfg.enabled ? "ON" : "OFF"} · 사업자: ${serverCfg.provider}`,
-        `MID: ${serverCfg.mid || "(미입력)"} · TID: ${serverCfg.tid || "(미입력)"}`,
+        `TID: ${serverCfg.tid || "(미입력)"}`,
         `단말 이름: ${serverCfg.terminalName || "-"}`,
         portLine,
       ]
